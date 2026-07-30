@@ -1,8 +1,9 @@
-import { getMeterRecords, getBlockList, type SortCol, type SortDir, type StatusFilter } from './_actions';
-import { getRegionsWithBlocks } from '@/app/admin/regions/_actions';
-import MeterTable from '@/components/admin/MeterTable';
+import { getMeterRecords, getBlockList, type SortCol, type SortDir, type StatusFilter } from '@/features/meter-survey/api/actions';
+import { getRegionsWithBlocks } from '@/features/meter-survey/api/regions-actions';
+import { mapToTableRow, UNASSIGNED_REGION_ID } from '@/features/meter-survey/types/mappers';
+import MeterTable from '@/features/meter-survey/components/MeterTable';
 
-export const metadata = { title: '야장관리' };
+export const metadata = { title: '수용가조사' };
 
 const PAGE_SIZE = 20;
 const VALID_SORT_COLS: SortCol[] = ['row_no', 'address', 'survey_date'];
@@ -28,8 +29,16 @@ export default async function MeterPage({
   const [regions, blocks] = await Promise.all([getRegionsWithBlocks(), getBlockList()]);
 
   const selectedRegion = regionId ? regions.find((r) => r.id === regionId) : undefined;
-  // 지역 선택 시 해당 지역 블록 목록으로 필터 (단일 블록 선택 중이면 block 필터 우선)
-  const blockIn = selectedRegion && !block ? selectedRegion.blocks : undefined;
+  // 미분류: 어느 지역에도 배정되지 않은 블록만
+  const unassignedBlocks =
+    regionId === UNASSIGNED_REGION_ID
+      ? (() => {
+          const assigned = new Set(regions.flatMap((r) => r.blocks));
+          return blocks.filter((b) => !assigned.has(b));
+        })()
+      : undefined;
+  // 지역 선택 시 해당 지역(또는 미분류) 블록 목록으로 필터 (단일 블록 선택 중이면 block 필터 우선)
+  const blockIn = block ? undefined : unassignedBlocks ?? selectedRegion?.blocks;
 
   const { data, count, totalCount, processedCount, closedCount } = await getMeterRecords(
     page, PAGE_SIZE, block, search, sortCol, sortDir, status, dateFrom, dateTo, blockIn,
@@ -41,18 +50,18 @@ export default async function MeterPage({
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">야장관리</h1>
-          <p className="text-sm mt-1 flex items-center gap-2">
-            <span className="text-emerald-400">처리 {processedCount}개</span>
-            <span className="text-zinc-700">|</span>
-            <span className="text-zinc-500">미처리 {unprocessedCount}개</span>
-            <span className="text-zinc-700">|</span>
-            <span className="text-amber-500">호폐 {closedCount}개</span>
+          <h1 className="text-2xl font-bold text-text-primary">수용가조사</h1>
+          <p className="text-sm mt-1 flex items-center gap-2 tabular-nums">
+            <span className="text-success">처리 {processedCount}개</span>
+            <span className="text-border">|</span>
+            <span className="text-text-secondary">미처리 {unprocessedCount}개</span>
+            <span className="text-border">|</span>
+            <span className="text-warning">호폐 {closedCount}개</span>
           </p>
         </div>
       </div>
       <MeterTable
-        records={data}
+        records={data.map(mapToTableRow)}
         blocks={blocks}
         selectedBlock={block ?? null}
         regions={regions}

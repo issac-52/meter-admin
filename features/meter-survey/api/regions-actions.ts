@@ -1,7 +1,7 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
+import { createClient as createServerClient } from '@/shared/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
 export type Region = { id: string; name: string; created_at: string };

@@ -3,7 +3,8 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, Download, X, FileSpreadsheet, RefreshCw } from 'lucide-react';
-import { getCompletedRecords, type MeterRecord } from '@/app/admin/meter/_actions';
+import { getCompletedRecords } from '@/features/meter-survey/api/actions';
+import type { MeterRecord } from '@/shared/types/meter-record';
 
 // 도면번호 + 지침 + 봉인유무가 모두 있어야 '처리됨'으로 간주
 type ParsedRow = {

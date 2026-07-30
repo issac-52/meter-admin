@@ -5,19 +5,13 @@ import { LocateFixed, RefreshCw, X } from 'lucide-react';
 import {
   getMeterRecordsForMap,
   getUngeocodedRecords,
-  type MeterRecord,
   type StatusFilter,
-} from '@/app/admin/meter/_actions';
+} from '@/features/meter-survey/api/actions';
+import { mapToMapMarker, type MeterMapMarker } from '@/features/meter-survey/types/mappers';
 import MeterEditModal from './MeterEditModal';
 
 declare global {
   interface Window { naver: any; }
-}
-
-function getStatus(r: MeterRecord): 'processed' | 'unprocessed' | 'closed' {
-  if (r.note === '호폐') return 'closed';
-  if (r.meter_number && r.reading && r.sealed && r.location && r.usage_type && r.floor) return 'processed';
-  return 'unprocessed';
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -33,9 +27,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 // 그룹 내 가장 주의가 필요한 상태 색상 반환 (미처리 > 호폐 > 처리됨)
-function getGroupColor(group: MeterRecord[]): string {
-  if (group.some(r => getStatus(r) === 'unprocessed')) return STATUS_COLOR.unprocessed;
-  if (group.some(r => getStatus(r) === 'closed')) return STATUS_COLOR.closed;
+function getGroupColor(group: MeterMapMarker[]): string {
+  if (group.some(r => r.status === 'unprocessed')) return STATUS_COLOR.unprocessed;
+  if (group.some(r => r.status === 'closed')) return STATUS_COLOR.closed;
   return STATUS_COLOR.processed;
 }
 
@@ -59,13 +53,13 @@ export default function MeterMapView({
   const activeMarkers = useRef<Map<string, any>>(new Map());
   const userMarker = useRef<any>(null);
   // idle 이벤트 핸들러에서 최신 records에 접근하기 위한 ref
-  const recordsRef = useRef<MeterRecord[]>([]);
+  const recordsRef = useRef<MeterMapMarker[]>([]);
 
-  const [records, setRecords] = useState<MeterRecord[]>([]);
+  const [records, setRecords] = useState<MeterMapMarker[]>([]);
   const [ungeocodedCount, setUngeocodedCount] = useState(0);
-  const [editingRecord, setEditingRecord] = useState<MeterRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<MeterMapMarker | null>(null);
   // 같은 위치에 여러 레코드가 있을 때 선택 목록
-  const [overlapRecords, setOverlapRecords] = useState<MeterRecord[] | null>(null);
+  const [overlapRecords, setOverlapRecords] = useState<MeterMapMarker[] | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeProgress, setGeocodeProgress] = useState<{ current: number; total: number } | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
@@ -118,7 +112,7 @@ export default function MeterMapView({
       getMeterRecordsForMap(selectedBlock ?? undefined, status ?? undefined),
       getUngeocodedRecords(selectedBlock ?? undefined),
     ]);
-    setRecords(data);
+    setRecords(data.map(mapToMapMarker));
     setUngeocodedCount(ungeocoded.length);
     setLoading(false);
   }, [selectedBlock, status]);
@@ -181,7 +175,7 @@ export default function MeterMapView({
     const recs = recordsRef.current;
 
     // 뷰포트 내 레코드를 위치 키(`lat,lng`)로 그룹화
-    const visibleGroups = new Map<string, MeterRecord[]>();
+    const visibleGroups = new Map<string, MeterMapMarker[]>();
     recs.forEach(r => {
       if (r.lat == null || r.lng == null) return;
       if (!bounds.hasLatLng(new nm.LatLng(r.lat, r.lng))) return;
@@ -206,7 +200,7 @@ export default function MeterMapView({
       if (activeMarkers.current.has(posKey)) return;
       const first = group[0];
       const isMultiple = group.length > 1;
-      const color = isMultiple ? getGroupColor(group) : STATUS_COLOR[getStatus(first)];
+      const color = isMultiple ? getGroupColor(group) : STATUS_COLOR[first.status];
 
       const content = isMultiple
         ? `<div style="width:20px;height:20px;background:${color};border-radius:50%;border:2px solid rgba(0,0,0,0.5);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;line-height:1;">${group.length}</div>`
@@ -270,17 +264,17 @@ export default function MeterMapView({
     <div className="flex flex-col gap-3">
       {/* 상태 바 */}
       <div className="flex items-center gap-3 flex-wrap text-xs">
-        <span className="text-zinc-500">
-          좌표 있음 <span className="text-emerald-400 font-semibold">{records.length}</span>개
+        <span className="text-text-secondary tabular-nums">
+          좌표 있음 <span className="text-success font-semibold">{records.length}</span>개
           {ungeocodedCount > 0 && (
-            <> · 없음 <span className="text-zinc-400 font-semibold">{ungeocodedCount}</span>개</>
+            <> · 없음 <span className="text-text-secondary font-semibold">{ungeocodedCount}</span>개</>
           )}
         </span>
         {ungeocodedCount > 0 && (
           <button
             onClick={handleGeocoding}
             disabled={geocoding}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 text-zinc-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border text-text-secondary hover:text-text-primary rounded-lg transition-colors disabled:opacity-50"
           >
             {geocoding ? (
               <>
@@ -291,30 +285,30 @@ export default function MeterMapView({
           </button>
         )}
         <div className="ml-auto flex items-center gap-3">
-          <span className="flex items-center gap-1 text-zinc-500"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />처리됨</span>
-          <span className="flex items-center gap-1 text-zinc-500"><span className="w-2.5 h-2.5 rounded-full bg-zinc-500 inline-block" />미처리</span>
-          <span className="flex items-center gap-1 text-zinc-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />호폐</span>
+          <span className="flex items-center gap-1 text-text-secondary"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: STATUS_COLOR.processed }} />처리됨</span>
+          <span className="flex items-center gap-1 text-text-secondary"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: STATUS_COLOR.unprocessed }} />미처리</span>
+          <span className="flex items-center gap-1 text-text-secondary"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: STATUS_COLOR.closed }} />호폐</span>
         </div>
       </div>
 
-      {/* 지도 */}
-      <div className="relative rounded-xl overflow-hidden border border-zinc-800" style={{ height: '65dvh' }}>
+      {/* 지도 — Naver Maps 자체 스타일은 그대로 두고, 주변 오버레이 UI만 토큰 적용 */}
+      <div className="relative rounded-xl overflow-hidden border border-border" style={{ height: '65dvh' }}>
         {(loading || !sdkReady) && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-zinc-900/90">
-            <RefreshCw size={20} className="animate-spin text-zinc-400" />
-            {!sdkReady && <p className="text-xs text-zinc-500">지도 로딩 중...</p>}
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface/90">
+            <RefreshCw size={20} className="animate-spin text-text-secondary" />
+            {!sdkReady && <p className="text-xs text-text-secondary">지도 로딩 중...</p>}
           </div>
         )}
         <div ref={mapRef} className="w-full h-full" />
         {mapZoom < MIN_ZOOM_FOR_MARKERS && !loading && sdkReady && (
-          <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-zinc-900/90 border border-zinc-700 text-zinc-400 text-xs rounded-lg whitespace-nowrap pointer-events-none">
+          <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-surface/90 border border-border text-text-secondary text-xs rounded-lg whitespace-nowrap pointer-events-none">
             더 확대하면 마커가 표시됩니다
           </div>
         )}
         <button
           onClick={locateUser}
           disabled={locating}
-          className="absolute bottom-4 right-4 z-10 p-2.5 bg-zinc-900/90 border border-zinc-700 text-zinc-300 hover:text-white rounded-xl transition-colors disabled:opacity-50"
+          className="absolute bottom-4 right-4 z-10 p-2.5 bg-surface/90 border border-border text-text-secondary hover:text-text-primary rounded-xl transition-colors disabled:opacity-50"
           title="내 위치로 이동"
         >
           <LocateFixed size={16} className={locating ? 'animate-pulse' : ''} />
@@ -328,38 +322,38 @@ export default function MeterMapView({
           onClick={() => setOverlapRecords(null)}
         >
           <div
-            className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-t-2xl p-4 pb-safe"
+            className="w-full max-w-lg bg-surface border border-border rounded-t-2xl p-4 pb-safe"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-zinc-200">
+              <span className="text-sm font-semibold text-text-primary">
                 같은 위치 계량기 {overlapRecords.length}개
               </span>
               <button
                 onClick={() => setOverlapRecords(null)}
-                className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="p-1 text-text-secondary hover:text-text-primary transition-colors"
               >
                 <X size={16} />
               </button>
             </div>
             <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
               {overlapRecords.map(r => {
-                const st = getStatus(r);
+                const st = r.status;
                 return (
                   <button
                     key={r.id}
                     onClick={() => { setOverlapRecords(null); setEditingRecord(r); }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-zinc-800 text-left transition-colors"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-left transition-colors"
                   >
                     <span
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                       style={{ background: STATUS_COLOR[st] }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-200 truncate">{r.name ?? '이름 없음'}</p>
-                      <p className="text-xs text-zinc-500 truncate">{r.address ?? r.row_no ?? '-'}</p>
+                      <p className="text-sm text-text-primary truncate">{r.name ?? '이름 없음'}</p>
+                      <p className="text-xs text-text-secondary truncate">{r.address ?? r.row_no ?? '-'}</p>
                     </div>
-                    <span className="text-xs text-zinc-500 flex-shrink-0">{STATUS_LABEL[st]}</span>
+                    <span className="text-xs text-text-secondary flex-shrink-0">{STATUS_LABEL[st]}</span>
                   </button>
                 );
               })}

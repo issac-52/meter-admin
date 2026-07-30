@@ -1,16 +1,44 @@
 @import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #09090b;
-  --foreground: #f4f4f5;
+  --background: #fafafa;
+  --surface: #ffffff;
+  --border: #e4e4e7;
+  --text-primary: #18181b;
+  --text-secondary: #71717a;
+  --accent: #0e7490;
+  --success: #16a34a;
+  --warning: #d97706;
+}
+
+.dark {
+  --background: #18181b;
+  --surface: #27272a;
+  --border: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --accent: #22d3ee;
+  --success: #22c55e;
+  --warning: #f59e0b;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: 'Pretendard Variable', ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }

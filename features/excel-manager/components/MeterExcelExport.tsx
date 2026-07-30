@@ -59,13 +59,13 @@ export default function MeterExcelExport() {
 
   return (
     <div className="max-w-lg space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+      <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
         <div>
-          <p className="text-xs font-semibold text-zinc-400 mb-1">블록 필터 (선택)</p>
+          <p className="text-xs font-semibold text-text-secondary mb-1">블록 필터 (선택)</p>
           <select
             value={block}
             onChange={(e) => setBlock(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
+            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
           >
             <option value="">전체 블록</option>
             {blocks.map((b) => (
@@ -76,35 +76,35 @@ export default function MeterExcelExport() {
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-semibold text-zinc-400">날짜 필터 (선택)</p>
+            <p className="text-xs font-semibold text-text-secondary">날짜 필터 (선택)</p>
             {(dateFrom || dateTo) && (
               <button
                 onClick={() => { setDateFrom(''); setDateTo(''); }}
-                className="text-xs text-zinc-500 hover:text-white transition-colors"
+                className="text-xs text-text-secondary hover:text-text-primary transition-colors"
               >
                 초기화
               </button>
             )}
           </div>
-          <p className="text-xs text-zinc-600 mb-2">조사일 기준으로 필터링합니다</p>
+          <p className="text-xs text-text-secondary/70 mb-2">조사일 기준으로 필터링합니다</p>
           <div className="flex gap-2">
             <div className="flex-1">
-              <label className="block text-xs text-zinc-500 mb-1">시작일</label>
+              <label className="block text-xs text-text-secondary mb-1">시작일</label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 [color-scheme:dark]"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary tabular-nums focus:outline-none focus:border-accent [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs text-zinc-500 mb-1">종료일</label>
+              <label className="block text-xs text-text-secondary mb-1">종료일</label>
               <input
                 type="date"
                 value={dateTo}
                 min={dateFrom}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 [color-scheme:dark]"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary tabular-nums focus:outline-none focus:border-accent [color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
           </div>
@@ -112,20 +112,20 @@ export default function MeterExcelExport() {
       </div>
 
       {error && (
-        <div className="px-4 py-3 bg-red-400/10 border border-red-400/20 rounded-lg text-red-400 text-sm">
+        <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
           {error}
         </div>
       )}
       {lastCount !== null && !error && (
-        <div className="px-4 py-3 bg-zinc-800 rounded-lg text-sm text-zinc-300">
-          <span className="text-emerald-400 font-semibold">{lastCount.toLocaleString()}건</span> 다운로드 완료
+        <div className="px-4 py-3 bg-surface border border-border rounded-lg text-sm text-text-primary">
+          <span className="text-success font-semibold tabular-nums">{lastCount.toLocaleString()}건</span> 다운로드 완료
         </div>
       )}
 
       <button
         onClick={handleDownload}
         disabled={isDownloading}
-        className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-400 text-zinc-950 font-semibold text-sm rounded-xl hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="w-full flex items-center justify-center gap-2 py-3 bg-accent text-white dark:text-zinc-950 font-semibold text-sm rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
       >
         {isDownloading
           ? <><RefreshCw size={15} className="animate-spin" />생성 중...</>

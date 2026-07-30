@@ -3,7 +3,9 @@
 import { useState, useRef, useTransition } from 'react';
 import * as XLSX from 'xlsx';
 import { X, Upload, ChevronRight } from 'lucide-react';
-import { importFromExcel, getBlockRowNos, type MeterInsert } from '@/app/admin/meter/_actions';
+import { importFromExcel, getBlockRowNos } from '@/features/meter-survey/api/actions';
+import type { MeterInsert } from '@/shared/types/meter-record';
+import { oldFormatRowSchema, daebulFormatRowSchema, validateRows } from '@/features/excel-manager/types/excel-row-schema';
 
 // ─── 기존 형식 (금산군수용가조사기록지) ───────────────────────────────────────
 const EXCEL_MAP_OLD: Record<string, keyof MeterInsert> = {
@@ -80,6 +82,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
   const [filteredRows, setFilteredRows] = useState<MeterInsert[]>([]);
   const [existingRowNos, setExistingRowNos] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [skippedRowIssues, setSkippedRowIssues] = useState<string[]>([]);
   const [format, setFormat] = useState<'old' | 'daebul'>('old');
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,6 +91,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setSkippedRowIssues([]);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -170,8 +174,10 @@ export default function MeterExcelUpload({ onClose }: Props) {
         } as MeterInsert;
       });
 
+    const { validRows, issues } = validateRows(parsed, daebulFormatRowSchema);
+
     const blocks = [
-      ...new Set(parsed.map((r) => r.block).filter((b): b is string => !!b)),
+      ...new Set(validRows.map((r) => r.block).filter((b): b is string => !!b)),
     ].sort();
 
     if (blocks.length === 0) {
@@ -180,8 +186,9 @@ export default function MeterExcelUpload({ onClose }: Props) {
     }
 
     setFormat('daebul');
-    setAllRows(parsed);
+    setAllRows(validRows);
     setBlockOptions(blocks);
+    setSkippedRowIssues(issues);
     setStep(2);
   }
 
@@ -233,8 +240,10 @@ export default function MeterExcelUpload({ onClose }: Props) {
       return row as MeterInsert;
     });
 
+    const { validRows, issues } = validateRows(parsed, oldFormatRowSchema);
+
     const blocks = [
-      ...new Set(parsed.map((r) => r.block).filter((b): b is string => !!b)),
+      ...new Set(validRows.map((r) => r.block).filter((b): b is string => !!b)),
     ].sort();
 
     if (blocks.length === 0) {
@@ -243,8 +252,9 @@ export default function MeterExcelUpload({ onClose }: Props) {
     }
 
     setFormat('old');
-    setAllRows(parsed);
+    setAllRows(validRows);
     setBlockOptions(blocks);
+    setSkippedRowIssues(issues);
     setStep(2);
   }
 
@@ -274,12 +284,12 @@ export default function MeterExcelUpload({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+      <div className="bg-surface border border-border rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-4">
-            <h2 className="text-white font-semibold">엑셀 업로드</h2>
+            <h2 className="text-text-primary font-semibold">엑셀 업로드</h2>
             {step > 1 && (
-              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${format === 'daebul' ? 'bg-blue-400/20 text-blue-400' : 'bg-zinc-700 text-zinc-400'}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${format === 'daebul' ? 'bg-accent/15 text-accent' : 'bg-background text-text-secondary'}`}>
                 {format === 'daebul' ? '대불 형식' : '기존 형식'}
               </span>
             )}
@@ -290,13 +300,13 @@ export default function MeterExcelUpload({ onClose }: Props) {
                   <span key={s} className="flex items-center gap-1.5">
                     <span
                       className={`w-5 h-5 rounded-full flex items-center justify-center font-semibold ${
-                        step >= s ? 'bg-emerald-400 text-zinc-950' : 'bg-zinc-800 text-zinc-500'
+                        step >= s ? 'bg-accent text-white dark:text-zinc-950' : 'bg-background text-text-secondary'
                       }`}
                     >
                       {s}
                     </span>
-                    <span className={step >= s ? 'text-zinc-300' : 'text-zinc-600'}>{label}</span>
-                    {s < 3 && <ChevronRight size={12} className="text-zinc-700" />}
+                    <span className={step >= s ? 'text-text-primary' : 'text-text-secondary/70'}>{label}</span>
+                    {s < 3 && <ChevronRight size={12} className="text-text-secondary/50" />}
                   </span>
                 );
               })}
@@ -304,7 +314,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
           >
             <X size={16} />
           </button>
@@ -312,19 +322,19 @@ export default function MeterExcelUpload({ onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto p-5">
           {error && (
-            <div className="mb-4 px-3 py-2 bg-red-400/10 border border-red-400/20 rounded-lg text-red-400 text-sm">
+            <div className="mb-4 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
               {error}
             </div>
           )}
 
           {step === 1 && (
             <div
-              className="border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center py-20 cursor-pointer hover:border-emerald-400/50 transition-colors"
+              className="border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center py-20 cursor-pointer hover:border-accent/50 transition-colors"
               onClick={() => fileRef.current?.click()}
             >
-              <Upload size={36} className="text-zinc-600 mb-3" />
-              <p className="text-white font-medium">클릭하여 엑셀 파일 선택</p>
-              <p className="text-zinc-500 text-sm mt-1">.xlsx, .xls 지원 · 기존/대불 형식 자동 감지</p>
+              <Upload size={36} className="text-text-secondary mb-3" />
+              <p className="text-text-primary font-medium">클릭하여 엑셀 파일 선택</p>
+              <p className="text-text-secondary text-sm mt-1">.xlsx, .xls 지원 · 기존/대불 형식 자동 감지</p>
               <input
                 ref={fileRef}
                 type="file"
@@ -337,9 +347,24 @@ export default function MeterExcelUpload({ onClose }: Props) {
 
           {step === 2 && (
             <div>
-              <p className="text-zinc-400 text-sm mb-5">
+              {skippedRowIssues.length > 0 && (
+                <div className="mb-4 px-3 py-2 bg-warning/10 border border-warning/20 rounded-lg text-warning text-xs">
+                  <p className="font-semibold mb-1">
+                    필수 항목 누락으로 {skippedRowIssues.length}개 행을 제외했습니다.
+                  </p>
+                  <ul className="space-y-0.5 text-warning/80">
+                    {skippedRowIssues.slice(0, 10).map((issue, i) => (
+                      <li key={i}>{issue}</li>
+                    ))}
+                  </ul>
+                  {skippedRowIssues.length > 10 && (
+                    <p className="mt-1 text-warning/60">외 {skippedRowIssues.length - 10}건</p>
+                  )}
+                </div>
+              )}
+              <p className="text-text-secondary text-sm mb-5">
                 파일에서{' '}
-                <span className="text-white font-semibold">{blockOptions.length}개</span>의 블록을
+                <span className="text-text-primary font-semibold">{blockOptions.length}개</span>의 블록을
                 찾았습니다. 가져올 블록을 선택하세요.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -349,8 +374,8 @@ export default function MeterExcelUpload({ onClose }: Props) {
                     onClick={() => setSelectedBlock(b)}
                     className={`px-4 py-2 rounded-lg font-mono text-sm font-semibold transition-colors ${
                       selectedBlock === b
-                        ? 'bg-emerald-400 text-zinc-950'
-                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                        ? 'bg-accent text-white dark:text-zinc-950'
+                        : 'bg-background text-text-secondary hover:text-text-primary'
                     }`}
                   >
                     {b}
@@ -358,9 +383,9 @@ export default function MeterExcelUpload({ onClose }: Props) {
                 ))}
               </div>
               {selectedBlock && (
-                <p className="mt-5 text-zinc-500 text-sm">
+                <p className="mt-5 text-text-secondary text-sm">
                   선택:{' '}
-                  <span className="text-emerald-400 font-mono font-semibold">{selectedBlock}</span>
+                  <span className="text-accent font-mono font-semibold">{selectedBlock}</span>
                   {' — '}
                   {allRows.filter((r) => r.block === selectedBlock).length}개 레코드
                 </p>
@@ -376,28 +401,28 @@ export default function MeterExcelUpload({ onClose }: Props) {
                 return (
                   <>
                     <div className="flex gap-2 mb-4">
-                      <div className="flex-1 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-4 py-3 text-center">
-                        <p className="text-2xl font-bold text-emerald-400">{newRows.length}</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">신규 추가</p>
+                      <div className="flex-1 bg-success/10 border border-success/20 rounded-lg px-4 py-3 text-center">
+                        <p className="text-2xl font-bold text-success tabular-nums">{newRows.length}</p>
+                        <p className="text-xs text-text-secondary mt-0.5">신규 추가</p>
                       </div>
-                      <div className="flex-1 bg-blue-400/10 border border-blue-400/20 rounded-lg px-4 py-3 text-center">
-                        <p className="text-2xl font-bold text-blue-400">{updateRows.length}</p>
-                        <p className="text-xs text-zinc-400 mt-0.5">기본정보 업데이트</p>
-                        <p className="text-[10px] text-zinc-600 mt-0.5">조사 데이터 보존</p>
+                      <div className="flex-1 bg-accent/10 border border-accent/20 rounded-lg px-4 py-3 text-center">
+                        <p className="text-2xl font-bold text-accent tabular-nums">{updateRows.length}</p>
+                        <p className="text-xs text-text-secondary mt-0.5">기본정보 업데이트</p>
+                        <p className="text-[10px] text-text-secondary/70 mt-0.5">조사 데이터 보존</p>
                       </div>
                     </div>
                   </>
                 );
               })()}
-              <div className="overflow-x-auto rounded-lg border border-zinc-800">
+              <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-zinc-950 border-b border-zinc-800">
-                      <th className="px-3 py-2 text-left text-zinc-500 w-8">#</th>
+                    <tr className="bg-background border-b border-border">
+                      <th className="px-3 py-2 text-left text-text-secondary w-8">#</th>
                       {PREVIEW_COLS.map((c) => (
                         <th
                           key={c.key}
-                          className="px-3 py-2 text-left text-zinc-400 whitespace-nowrap"
+                          className="px-3 py-2 text-left text-text-secondary whitespace-nowrap"
                         >
                           {c.label}
                         </th>
@@ -408,17 +433,17 @@ export default function MeterExcelUpload({ onClose }: Props) {
                     {filteredRows.slice(0, 10).map((row, i) => {
                       const isExisting = row.row_no != null && existingRowNos.has(row.row_no);
                       return (
-                        <tr key={i} className="border-b border-zinc-800 last:border-0">
-                          <td className="px-3 py-2 text-zinc-600">{i + 1}</td>
+                        <tr key={i} className="border-b border-border last:border-0">
+                          <td className="px-3 py-2 text-text-secondary tabular-nums">{i + 1}</td>
                           {PREVIEW_COLS.map((c) => (
-                            <td key={c.key} className="px-3 py-2 text-zinc-300 whitespace-nowrap">
+                            <td key={c.key} className="px-3 py-2 text-text-primary whitespace-nowrap tabular-nums">
                               {(row[c.key] as string) ?? '-'}
                             </td>
                           ))}
                           <td className="px-3 py-2">
                             {isExisting
-                              ? <span className="text-[10px] font-semibold text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded-full">업데이트</span>
-                              : <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">신규</span>
+                              ? <span className="text-[10px] font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">업데이트</span>
+                              : <span className="text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">신규</span>
                             }
                           </td>
                         </tr>
@@ -428,7 +453,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
                 </table>
               </div>
               {filteredRows.length > 10 && (
-                <p className="text-zinc-600 text-xs mt-2 text-center">
+                <p className="text-text-secondary/70 text-xs mt-2 text-center tabular-nums">
                   처음 10개 미리보기 · 전체 {filteredRows.length}개 가져옵니다
                 </p>
               )}
@@ -436,10 +461,10 @@ export default function MeterExcelUpload({ onClose }: Props) {
           )}
         </div>
 
-        <div className="p-5 border-t border-zinc-800 flex justify-end gap-2">
+        <div className="p-5 border-t border-border flex justify-end gap-2">
           <button
             onClick={step === 1 ? onClose : () => setStep((s) => (s - 1) as 1 | 2 | 3)}
-            className="px-4 py-2 text-sm text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+            className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary bg-background hover:bg-border/60 rounded-lg transition-colors"
           >
             {step === 1 ? '취소' : '이전'}
           </button>
@@ -447,7 +472,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
             <button
               onClick={handleBlockConfirm}
               disabled={!selectedBlock}
-              className="px-4 py-2 text-sm font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 rounded-lg disabled:opacity-40 transition-colors"
+              className="px-4 py-2 text-sm font-semibold bg-accent text-white dark:text-zinc-950 hover:opacity-90 rounded-lg disabled:opacity-40 transition-opacity"
             >
               다음
             </button>
@@ -456,7 +481,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
             <button
               onClick={handleImport}
               disabled={isPending}
-              className="px-4 py-2 text-sm font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 rounded-lg disabled:opacity-40 transition-colors"
+              className="px-4 py-2 text-sm font-semibold bg-accent text-white dark:text-zinc-950 hover:opacity-90 rounded-lg disabled:opacity-40 transition-opacity"
             >
               {isPending ? '가져오는 중...' : '가져오기'}
             </button>

@@ -2,47 +2,40 @@
 
 import { useState, useTransition, useRef } from 'react';
 import { X, Check, Camera, Trash2, ImagePlus, ExternalLink, ChevronDown } from 'lucide-react';
-import { updateMeterRecord, type MeterRecord, type MeterInsert } from '@/app/admin/meter/_actions';
+import { updateMeterRecord } from '@/features/meter-survey/api/actions';
+import type { MeterRecord, MeterInsert } from '@/shared/types/meter-record';
+import { mapToEditFormValues, USAGE_TYPES, LOCATION_DETAIL_OPTIONS } from '@/features/meter-survey/types/mappers';
 
 const STORAGE_BASE = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
 const thumbnailUrl = (path: string) => `${STORAGE_BASE}/${path}`;
 const viewUrl = (path: string) => `${STORAGE_BASE}/${path}`;
 
-const LOCATION_DETAIL_OPTIONS = ['건물앞', '건물뒤', '건물좌', '건물우', '입구좌', '입구우', '대문좌측', '대문우측', '기타'];
-
-function parseLocationInit(val: string | null) {
-  if (!val) return { inOut: '' as '' | '옥내' | '옥외', detail: '', custom: '' };
-  const m = val.match(/^(옥내|옥외)\((.+)\)$/);
-  if (m) {
-    const known = LOCATION_DETAIL_OPTIONS.slice(0, -1);
-    const detail = m[2];
-    if (known.includes(detail)) return { inOut: m[1] as '옥내' | '옥외', detail, custom: '' };
-    return { inOut: m[1] as '옥내' | '옥외', detail: '기타', custom: detail };
-  }
-  return { inOut: '' as '' | '옥내' | '옥외', detail: '기타', custom: val };
-}
-
 const COVER_OPTIONS = ['', '뚜껑 파손', '뚜껑 없음', '없음'];
 const WATER_SUPPLY_OPTIONS = ['직접', '간접', '물탱크', '저수조'];
 const METER_CONDITION_OPTIONS = ['', '초파', '녹폐', '정상'];
-const USAGE_TYPES = ['가정집', '상가', '주상복합', '빌라', '공공기관', '기타'];
-
-function nowString() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
 
 type Props = {
   record: MeterRecord;
   onClose: () => void;
 };
 
-const labelCls = 'block text-xs font-semibold text-zinc-400 mb-1.5';
+const labelCls = 'block text-xs font-semibold text-text-secondary mb-1.5';
 const inputCls =
-  'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-base md:text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors';
+  'w-full bg-background border border-border rounded-lg px-3 py-2 text-base md:text-sm text-text-primary focus:outline-none focus:border-accent transition-colors';
 const selectCls =
-  'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-base md:text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors';
+  'w-full bg-background border border-border rounded-lg px-3 py-2 text-base md:text-sm text-text-primary focus:outline-none focus:border-accent transition-colors';
+const optionBtnCls = (active: boolean) =>
+  `px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+    active
+      ? 'bg-accent border-accent text-white dark:text-zinc-950 font-semibold'
+      : 'bg-background border-border text-text-secondary hover:text-text-primary'
+  }`;
+const unselectBtnCls = (active: boolean) =>
+  `px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+    active
+      ? 'bg-border border-text-secondary/50 text-text-primary'
+      : 'bg-background border-border text-text-secondary hover:text-text-primary'
+  }`;
 
 type ImageSlot = 1 | 2 | 3 | 4;
 
@@ -143,15 +136,15 @@ function ImageSlotCard({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs text-zinc-500">
+      <span className="text-xs text-text-secondary">
         이미지 {slot}{' '}
         {rowNo && (
-          <span className="text-zinc-600 font-mono">({rowNo}-{slot})</span>
+          <span className="text-text-secondary/70 font-mono">({rowNo}-{slot})</span>
         )}
       </span>
 
       {fileId ? (
-        <div className="relative rounded-lg overflow-hidden border border-zinc-700 bg-zinc-800">
+        <div className="relative rounded-lg overflow-hidden border border-border bg-background">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`${thumbnailUrl(fileId)}?t=${cacheBust}`}
@@ -183,7 +176,7 @@ function ImageSlotCard({
         </div>
       ) : (
         <label
-          className={`flex flex-col items-center justify-center gap-1.5 h-28 rounded-lg border border-dashed border-zinc-700 bg-zinc-800/50 cursor-pointer hover:border-emerald-400/50 hover:bg-zinc-800 transition-colors ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+          className={`flex flex-col items-center justify-center gap-1.5 h-28 rounded-lg border border-dashed border-border bg-background/50 cursor-pointer hover:border-accent/50 hover:bg-background transition-colors ${loading ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <input
             ref={inputRef}
@@ -193,63 +186,32 @@ function ImageSlotCard({
             className="hidden"
           />
           {loading ? (
-            <span className="text-xs text-zinc-400">업로드 중...</span>
+            <span className="text-xs text-text-secondary">업로드 중...</span>
           ) : (
             <>
-              <ImagePlus size={18} className="text-zinc-500" />
-              <span className="text-xs text-zinc-500">이미지 추가</span>
+              <ImagePlus size={18} className="text-text-secondary" />
+              <span className="text-xs text-text-secondary">이미지 추가</span>
             </>
           )}
         </label>
       )}
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }
 
 export default function MeterEditModal({ record, onClose }: Props) {
-  const isSameInit =
-    !!record.old_meter_number && record.meter_number === record.old_meter_number;
+  const [initial] = useState(() => mapToEditFormValues(record));
 
-  const initUsageSelect = (val: string | null) => {
-    if (!val) return '';
-    if (USAGE_TYPES.slice(0, -1).includes(val)) return val;
-    return '기타';
-  };
-  const initUsageCustom = (val: string | null) => {
-    if (!val) return '';
-    if (USAGE_TYPES.slice(0, -1).includes(val)) return '';
-    return val;
-  };
-  const initLoc = parseLocationInit(record.location);
-
-  const [meterSame, setMeterSame] = useState(isSameInit);
+  const [meterSame, setMeterSame] = useState(initial.meterSame);
   const [extraOpen, setExtraOpen] = useState(false);
-  const [usageTypeSelect, setUsageTypeSelect] = useState(initUsageSelect(record.usage_type));
-  const [usageTypeCustom, setUsageTypeCustom] = useState(initUsageCustom(record.usage_type));
-  const [locationInOut, setLocationInOut] = useState<'' | '옥내' | '옥외'>(initLoc.inOut);
-  const [locationDetail, setLocationDetail] = useState(initLoc.detail);
-  const [locationCustom, setLocationCustom] = useState(initLoc.custom);
-  const [values, setValues] = useState<Partial<MeterInsert>>({
-    meter_number: record.meter_number,
-    reading: record.reading,
-    sealed: record.sealed ?? '봉인',
-    usage_type: record.usage_type,
-    floor: record.floor,
-    note: record.note,
-    survey_date: nowString(),
-    cover_type: record.cover_type ?? '',
-    water_supply_type: record.water_supply_type ?? null,
-    meter_condition: record.meter_condition ?? null,
-    manufacturer: record.manufacturer ?? null,
-    relocation_needed: record.relocation_needed ?? null,
-    replacement_needed: record.replacement_needed ?? null,
-    water_tank_capacity: record.water_tank_capacity ?? null,
-    water_pressure: record.water_pressure ?? null,
-    meter_type: record.meter_type ?? null,
-    reading_method: record.reading_method ?? null,
-  });
+  const [usageTypeSelect, setUsageTypeSelect] = useState(initial.usageTypeSelect);
+  const [usageTypeCustom, setUsageTypeCustom] = useState(initial.usageTypeCustom);
+  const [locationInOut, setLocationInOut] = useState(initial.locationInOut);
+  const [locationDetail, setLocationDetail] = useState(initial.locationDetail);
+  const [locationCustom, setLocationCustom] = useState(initial.locationCustom);
+  const [values, setValues] = useState<Partial<MeterInsert>>(initial.values);
   const [image1Id, setImage1Id] = useState<string | null>(record.image1_id);
   const [image2Id, setImage2Id] = useState<string | null>(record.image2_id);
   const [image3Id, setImage3Id] = useState<string | null>(record.image3_id);
@@ -268,7 +230,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
 
   function selectX() {
     setMeterSame(false);
-    set('meter_number', isSameInit ? null : record.meter_number);
+    set('meter_number', initial.meterSame ? null : record.meter_number);
   }
 
   function handleSave() {
@@ -328,58 +290,58 @@ export default function MeterEditModal({ record, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl md:rounded-xl w-full md:max-w-lg max-h-[92dvh] flex flex-col">
+      <div className="bg-surface border border-border rounded-t-2xl md:rounded-xl w-full md:max-w-lg max-h-[92dvh] flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-border">
           <div>
-            <p className="text-white font-semibold text-sm flex items-center gap-2">
+            <p className="text-text-primary font-semibold text-sm flex items-center gap-2">
               수정
               {imageCount > 0 && (
-                <span className="flex items-center gap-1 text-xs font-normal text-emerald-400">
+                <span className="flex items-center gap-1 text-xs font-normal text-accent tabular-nums">
                   <Camera size={12} />
                   {imageCount}
                 </span>
               )}
             </p>
-            <p className="text-zinc-500 text-xs mt-0.5">
+            <p className="text-text-secondary text-xs mt-0.5">
               {record.row_no && <span className="mr-2">도면번호 {record.row_no}</span>}
               {record.old_meter_number && (
-                <span className="mr-2 font-mono text-zinc-300">기존 {record.old_meter_number}</span>
+                <span className="mr-2 font-mono text-text-primary">기존 {record.old_meter_number}</span>
               )}
               {record.name}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+            className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* 식별 정보 */}
-        <div className="px-5 py-3 bg-zinc-950/50 border-b border-zinc-800">
-          <p className="text-xs text-zinc-500 truncate">{record.address ?? '-'}</p>
+        <div className="px-5 py-3 bg-background/50 border-b border-border">
+          <p className="text-xs text-text-secondary truncate">{record.address ?? '-'}</p>
         </div>
 
         {/* 폼 */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {error && (
-            <div className="px-3 py-2 bg-red-400/10 border border-red-400/20 rounded-lg text-red-400 text-xs">
+            <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-xs">
               {error}
             </div>
           )}
 
           {/* 기물번호 */}
           <div>
-            <label className="block text-sm font-bold text-white mb-2">기물번호</label>
+            <label className="block text-sm font-bold text-text-primary mb-2">기물번호</label>
             <div className="flex gap-2 mb-2">
               <button
                 onClick={selectO}
                 className={`flex-1 py-2.5 rounded-lg text-base font-bold border transition-colors ${
                   meterSame
-                    ? 'bg-emerald-400 border-emerald-400 text-zinc-950'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+                    ? 'bg-accent border-accent text-white dark:text-zinc-950'
+                    : 'bg-background border-border text-text-secondary hover:text-text-primary'
                 }`}
               >
                 O — 기존과 동일
@@ -388,15 +350,15 @@ export default function MeterEditModal({ record, onClose }: Props) {
                 onClick={selectX}
                 className={`flex-1 py-2.5 rounded-lg text-base font-bold border transition-colors ${
                   !meterSame
-                    ? 'bg-zinc-200 border-zinc-200 text-zinc-950'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+                    ? 'bg-border border-border text-text-primary'
+                    : 'bg-background border-border text-text-secondary hover:text-text-primary'
                 }`}
               >
                 X — 직접 입력
               </button>
             </div>
             {meterSame ? (
-              <div className="px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-lg text-xl font-bold text-emerald-400 font-mono tracking-wider">
+              <div className="px-4 py-3 bg-background/50 border border-border rounded-lg text-xl font-bold text-accent font-mono tracking-wider tabular-nums">
                 {record.old_meter_number ?? '-'}
               </div>
             ) : (
@@ -405,7 +367,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                 placeholder="기물번호 입력"
                 value={(values.meter_number as string) ?? ''}
                 onChange={(e) => set('meter_number', e.target.value || null)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-xl font-bold text-white font-mono tracking-wider focus:outline-none focus:border-emerald-400 transition-colors"
+                className="w-full bg-background border border-border rounded-lg px-4 py-3 text-xl font-bold text-text-primary font-mono tracking-wider tabular-nums focus:outline-none focus:border-accent transition-colors"
               />
             )}
           </div>
@@ -414,7 +376,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
           <div>
             <label className={labelCls}>
               이미지
-              <span className="ml-1.5 font-normal text-zinc-600">(최대 4장, 즉시 저장)</span>
+              <span className="ml-1.5 font-normal text-text-secondary/70">(최대 4장, 즉시 저장)</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
               {([1, 2, 3, 4] as ImageSlot[]).map((slot) => {
@@ -440,9 +402,9 @@ export default function MeterEditModal({ record, onClose }: Props) {
               <label className={labelCls}>지침</label>
               <div className="flex gap-2 items-center">
                 {record.final_reading != null && (
-                  <div className="shrink-0 px-3 py-2 bg-zinc-800/60 border border-zinc-700 rounded-lg text-center min-w-[72px]">
-                    <p className="text-[10px] text-zinc-500 mb-0.5">최종지침</p>
-                    <p className="font-mono text-base font-bold text-amber-400 leading-none">{record.final_reading}</p>
+                  <div className="shrink-0 px-3 py-2 bg-background/60 border border-border rounded-lg text-center min-w-[72px]">
+                    <p className="text-[10px] text-text-secondary mb-0.5">최종지침</p>
+                    <p className="font-mono text-base font-bold text-warning leading-none tabular-nums">{record.final_reading}</p>
                   </div>
                 )}
                 <input
@@ -466,9 +428,9 @@ export default function MeterEditModal({ record, onClose }: Props) {
                       value={v}
                       checked={values.sealed === v}
                       onChange={() => set('sealed', v)}
-                      className="w-4 h-4 accent-emerald-400"
+                      className="w-4 h-4 accent-accent"
                     />
-                    <span className="text-sm text-zinc-300">{v}</span>
+                    <span className="text-sm text-text-primary">{v}</span>
                   </label>
                 ))}
               </div>
@@ -487,8 +449,8 @@ export default function MeterEditModal({ record, onClose }: Props) {
                   onClick={() => { setLocationInOut(v); setLocationDetail(''); setLocationCustom(''); }}
                   className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                     locationInOut === v
-                      ? 'bg-emerald-400 border-emerald-400 text-zinc-950'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+                      ? 'bg-accent border-accent text-white dark:text-zinc-950'
+                      : 'bg-background border-border text-text-secondary hover:text-text-primary'
                   }`}
                 >
                   {v}
@@ -498,7 +460,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                 <button
                   type="button"
                   onClick={() => { setLocationInOut(''); setLocationDetail(''); setLocationCustom(''); }}
-                  className="px-3 py-2 text-xs text-zinc-600 hover:text-zinc-400 border border-zinc-800 rounded-lg transition-colors"
+                  className="px-3 py-2 text-xs text-text-secondary/70 hover:text-text-secondary border border-border rounded-lg transition-colors"
                 >
                   초기화
                 </button>
@@ -512,11 +474,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                     key={v}
                     type="button"
                     onClick={() => { setLocationDetail(v); if (v !== '기타') setLocationCustom(''); }}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                      locationDetail === v
-                        ? 'bg-emerald-400 border-emerald-400 text-zinc-950 font-semibold'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                    }`}
+                    className={optionBtnCls(locationDetail === v)}
                   >
                     {v}
                   </button>
@@ -579,7 +537,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
           {/* 비고 */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-zinc-400">비고</label>
+              <label className="text-xs font-semibold text-text-secondary">비고</label>
               <div className="flex items-center gap-1.5">
                 {(['호폐', '위치불명'] as const).map((preset) => (
                   <button
@@ -588,12 +546,8 @@ export default function MeterEditModal({ record, onClose }: Props) {
                     onClick={() => set('note', values.note === preset ? null : preset)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
                       values.note === preset
-                        ? preset === '호폐'
-                          ? 'bg-amber-400 border-amber-400 text-zinc-950'
-                          : 'bg-orange-400 border-orange-400 text-zinc-950'
-                        : preset === '호폐'
-                          ? 'bg-zinc-800 border-zinc-700 text-amber-400 hover:text-amber-300'
-                          : 'bg-zinc-800 border-zinc-700 text-orange-400 hover:text-orange-300'
+                        ? 'bg-warning border-warning text-white dark:text-zinc-950'
+                        : 'bg-background border-border text-warning hover:opacity-80'
                     }`}
                   >
                     {preset}
@@ -615,27 +569,27 @@ export default function MeterEditModal({ record, onClose }: Props) {
           <div>
             <label className={labelCls}>
               조사일자
-              <span className="ml-1.5 font-normal text-zinc-600">(입력 시각 자동 기록)</span>
+              <span className="ml-1.5 font-normal text-text-secondary/70">(입력 시각 자동 기록)</span>
             </label>
             <input
               type="text"
               value={(values.survey_date as string) ?? ''}
               onChange={(e) => set('survey_date', e.target.value || null)}
-              className={`${inputCls} font-mono`}
+              className={`${inputCls} font-mono tabular-nums`}
             />
           </div>
 
           {/* 추가정보 아코디언 */}
-          <div className="border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="border border-border rounded-xl overflow-hidden">
             <button
               type="button"
               onClick={() => setExtraOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 bg-background/50 hover:bg-background transition-colors"
             >
-              <span className="text-sm font-semibold text-zinc-300">추가정보</span>
+              <span className="text-sm font-semibold text-text-primary">추가정보</span>
               <ChevronDown
                 size={16}
-                className={`text-zinc-500 transition-transform ${extraOpen ? 'rotate-180' : ''}`}
+                className={`text-text-secondary transition-transform ${extraOpen ? 'rotate-180' : ''}`}
               />
             </button>
 
@@ -648,11 +602,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => set('meter_type', null)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                        !values.meter_type
-                          ? 'bg-zinc-600 border-zinc-500 text-white'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                      }`}
+                      className={unselectBtnCls(!values.meter_type)}
                     >
                       미선택
                     </button>
@@ -665,11 +615,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                           if (v === '기계식') set('reading_method', '인력검침');
                           else set('reading_method', null);
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                          values.meter_type === v
-                            ? 'bg-emerald-400 border-emerald-400 text-zinc-950 font-semibold'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                        }`}
+                        className={optionBtnCls(values.meter_type === v)}
                       >
                         {v}
                       </button>
@@ -682,7 +628,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                   <div>
                     <label className={labelCls}>검침방식</label>
                     {values.meter_type === '기계식' ? (
-                      <div className="px-3 py-2 bg-zinc-800/50 border border-zinc-700 rounded-lg text-sm text-zinc-300">
+                      <div className="px-3 py-2 bg-background/50 border border-border rounded-lg text-sm text-text-primary">
                         인력검침
                       </div>
                     ) : (
@@ -692,11 +638,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                             key={v}
                             type="button"
                             onClick={() => set('reading_method', v)}
-                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                              values.reading_method === v
-                                ? 'bg-emerald-400 border-emerald-400 text-zinc-950 font-semibold'
-                                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                            }`}
+                            className={optionBtnCls(values.reading_method === v)}
                           >
                             {v}
                           </button>
@@ -729,11 +671,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => set('water_supply_type', null)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                        !values.water_supply_type
-                          ? 'bg-zinc-600 border-zinc-500 text-white'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                      }`}
+                      className={unselectBtnCls(!values.water_supply_type)}
                     >
                       미선택
                     </button>
@@ -742,11 +680,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                         key={o}
                         type="button"
                         onClick={() => set('water_supply_type', o)}
-                        className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                          values.water_supply_type === o
-                            ? 'bg-emerald-400 border-emerald-400 text-zinc-950 font-semibold'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                        }`}
+                        className={optionBtnCls(values.water_supply_type === o)}
                       >
                         {o}
                       </button>
@@ -773,11 +707,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => set('meter_condition', null)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                        !values.meter_condition
-                          ? 'bg-zinc-600 border-zinc-500 text-white'
-                          : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                      }`}
+                      className={unselectBtnCls(!values.meter_condition)}
                     >
                       미선택
                     </button>
@@ -786,11 +716,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
                         key={o}
                         type="button"
                         onClick={() => set('meter_condition', o)}
-                        className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                          values.meter_condition === o
-                            ? 'bg-emerald-400 border-emerald-400 text-zinc-950 font-semibold'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-                        }`}
+                        className={optionBtnCls(values.meter_condition === o)}
                       >
                         {o}
                       </button>
@@ -822,16 +748,16 @@ export default function MeterEditModal({ record, onClose }: Props) {
                           value={v}
                           checked={values.relocation_needed === v}
                           onChange={() => set('relocation_needed', v)}
-                          className="w-4 h-4 accent-emerald-400"
+                          className="w-4 h-4 accent-accent"
                         />
-                        <span className="text-sm text-zinc-300">{v}</span>
+                        <span className="text-sm text-text-primary">{v}</span>
                       </label>
                     ))}
                     {values.relocation_needed && (
                       <button
                         type="button"
                         onClick={() => set('relocation_needed', null)}
-                        className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                        className="text-xs text-text-secondary/70 hover:text-text-secondary transition-colors"
                       >
                         초기화
                       </button>
@@ -864,16 +790,16 @@ export default function MeterEditModal({ record, onClose }: Props) {
                           value={v}
                           checked={values.replacement_needed === v}
                           onChange={() => set('replacement_needed', v)}
-                          className="w-4 h-4 accent-emerald-400"
+                          className="w-4 h-4 accent-accent"
                         />
-                        <span className="text-sm text-zinc-300">{v}</span>
+                        <span className="text-sm text-text-primary">{v}</span>
                       </label>
                     ))}
                     {values.replacement_needed && (
                       <button
                         type="button"
                         onClick={() => set('replacement_needed', null)}
-                        className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                        className="text-xs text-text-secondary/70 hover:text-text-secondary transition-colors"
                       >
                         초기화
                       </button>
@@ -887,17 +813,17 @@ export default function MeterEditModal({ record, onClose }: Props) {
         </div>
 
         {/* 푸터 */}
-        <div className="px-5 py-4 border-t border-zinc-800 flex gap-2">
+        <div className="px-5 py-4 border-t border-border flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 text-sm text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+            className="flex-1 py-2.5 text-sm text-text-secondary hover:text-text-primary bg-background hover:bg-border/60 rounded-lg transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={isPending}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold bg-emerald-400 text-zinc-950 hover:bg-emerald-300 rounded-lg disabled:opacity-50 transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold bg-accent text-white dark:text-zinc-950 hover:opacity-90 rounded-lg disabled:opacity-50 transition-opacity"
           >
             <Check size={15} />
             {isPending ? '저장 중...' : '저장'}

@@ -3,13 +3,14 @@
 import { useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Pencil, Download, ChevronLeft, ChevronRight, Search, X, Camera, ChevronUp, ChevronDown, ChevronsUpDown, Copy, Check, RefreshCw, MapPin, List, Map, Calendar } from 'lucide-react';
-import { type MeterRecord, type SortCol, type SortDir, type StatusFilter } from '@/app/admin/meter/_actions';
-import { type RegionWithBlocks } from '@/app/admin/regions/_actions';
+import { type SortCol, type SortDir, type StatusFilter } from '@/features/meter-survey/api/actions';
+import { type RegionWithBlocks } from '@/features/meter-survey/api/regions-actions';
+import { UNASSIGNED_REGION_ID, type MeterTableRow } from '@/features/meter-survey/types/mappers';
 import MeterEditModal from './MeterEditModal';
 import MeterMapView from './MeterMapView';
 
 type Props = {
-  records: MeterRecord[];
+  records: MeterTableRow[];
   blocks: string[];
   selectedBlock: string | null;
   regions: RegionWithBlocks[];
@@ -36,16 +37,9 @@ function getPaginationRange(current: number, total: number): (number | '…')[] 
 }
 
 function Val({ value }: { value: string | null }) {
-  if (!value) return <span className="text-zinc-600">-</span>;
-  return <span className="text-zinc-300">{value}</span>;
+  if (!value) return <span className="text-text-secondary/50">-</span>;
+  return <span className="text-text-primary">{value}</span>;
 }
-
-function getStatus(r: MeterRecord): 'processed' | 'unprocessed' | 'closed' {
-  if (r.note === '호폐' || r.note === '위치불명') return 'closed';
-  if (r.meter_number && r.reading && r.sealed && r.location && r.usage_type && r.floor) return 'processed';
-  return 'unprocessed';
-}
-
 
 export default function MeterTable({
   records,
@@ -68,7 +62,7 @@ export default function MeterTable({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const [editingRecord, setEditingRecord] = useState<MeterRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<MeterTableRow | null>(null);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloadDateFrom, setDownloadDateFrom] = useState('');
   const [downloadDateTo, setDownloadDateTo] = useState('');
@@ -160,7 +154,7 @@ export default function MeterTable({
     }
   }
 
-  function copyAddress(r: MeterRecord) {
+  function copyAddress(r: MeterTableRow) {
     if (!r.address) return;
     navigator.clipboard.writeText(r.address);
     setCopiedId(r.id);
@@ -218,10 +212,10 @@ export default function MeterTable({
   }
 
   function SortIcon({ col }: { col: SortCol }) {
-    if (sortCol !== col) return <ChevronsUpDown size={12} className="text-zinc-600" />;
+    if (sortCol !== col) return <ChevronsUpDown size={12} className="text-text-secondary/60" />;
     return sortDir === 'asc'
-      ? <ChevronUp size={12} className="text-emerald-400" />
-      : <ChevronDown size={12} className="text-emerald-400" />;
+      ? <ChevronUp size={12} className="text-accent" />
+      : <ChevronDown size={12} className="text-accent" />;
   }
 
   function handleDateSearch(e: React.FormEvent) {
@@ -247,10 +241,15 @@ export default function MeterTable({
 
   const isEmpty = records.length === 0;
 
-  // 지역 선택 시 해당 지역 블록만 표시
-  const regionBlockSet = selectedRegion
-    ? new Set(regions.find((r) => r.id === selectedRegion)?.blocks ?? [])
-    : null;
+  // 지역 선택 시 해당 지역(또는 미분류) 블록만 표시
+  const assignedBlockSet = new Set(regions.flatMap((r) => r.blocks));
+  const unassignedBlocks = blocks.filter((b) => !assignedBlockSet.has(b));
+  const regionBlockSet =
+    selectedRegion === UNASSIGNED_REGION_ID
+      ? new Set(unassignedBlocks)
+      : selectedRegion
+        ? new Set(regions.find((r) => r.id === selectedRegion)?.blocks ?? [])
+        : null;
   const visibleBlocks = regionBlockSet ? blocks.filter((b) => regionBlockSet.has(b)) : blocks;
 
   return (
@@ -258,60 +257,59 @@ export default function MeterTable({
       {/* 지역 필터 */}
       {regions.length > 0 && (
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-          <span className="text-xs text-zinc-600 mr-1">지역</span>
+          <span className="text-xs text-text-secondary/70 mr-1">지역</span>
           {regions.map((r) => (
             <button
               key={r.id}
               onClick={() => handleRegion(r.id)}
               className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${
                 selectedRegion === r.id
-                  ? 'bg-indigo-500 text-white font-semibold'
-                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  ? 'bg-accent text-white dark:text-zinc-950 font-semibold'
+                  : 'bg-surface text-text-secondary hover:text-text-primary'
               }`}
             >
               {r.name}
             </button>
           ))}
+          {unassignedBlocks.length > 0 && (
+            <button
+              onClick={() => handleRegion(UNASSIGNED_REGION_ID)}
+              className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${
+                selectedRegion === UNASSIGNED_REGION_ID
+                  ? 'bg-accent text-white dark:text-zinc-950 font-semibold'
+                  : 'bg-surface text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              미분류
+            </button>
+          )}
         </div>
       )}
       {/* 블록 필터 + 업로드 */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-        <button
-          onClick={() => navigate(1, null)}
-          className={`px-2.5 py-1.5 text-xs rounded-lg font-mono transition-colors ${
-            !selectedBlock
-              ? 'bg-emerald-400 text-zinc-950 font-semibold'
-              : 'bg-zinc-800 text-zinc-400 hover:text-white'
-          }`}
+        <select
+          value={selectedBlock ?? ''}
+          onChange={(e) => navigate(1, e.target.value || null)}
+          className="px-2.5 py-1.5 text-xs rounded-lg font-mono bg-surface border border-border text-text-primary focus:outline-none focus:border-accent transition-colors max-w-[10rem]"
         >
-          전체
-        </button>
-        {visibleBlocks.map((b) => (
-          <button
-            key={b}
-            onClick={() => navigate(1, b)}
-            className={`px-2.5 py-1.5 text-xs rounded-lg font-mono transition-colors ${
-              selectedBlock === b
-                ? 'bg-emerald-400 text-zinc-950 font-semibold'
-                : 'bg-zinc-800 text-zinc-400 hover:text-white'
-            }`}
-          >
-            {b}
-          </button>
-        ))}
+          <option value="">전체 블록 ({visibleBlocks.length})</option>
+          {visibleBlocks.map((b) => (
+            <option key={b} value={b}>{b}</option>
+          ))}
+        </select>
         <div className="ml-auto flex items-center gap-2">
           {/* 뷰 모드 토글 */}
-          <div className="flex items-center bg-zinc-800 rounded-lg p-0.5">
+          <div className="flex items-center bg-surface rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
             >
               <List size={13} />
               <span className="hidden sm:inline">목록</span>
             </button>
             <button
               onClick={() => setViewMode('map')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'map' ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'map' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
             >
               <Map size={13} />
               <span className="hidden sm:inline">지도</span>
@@ -319,7 +317,7 @@ export default function MeterTable({
           </div>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 text-zinc-400 hover:text-white text-sm rounded-lg hover:bg-zinc-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface text-text-secondary hover:text-text-primary text-sm rounded-lg hover:bg-border/60 transition-colors"
             title="새로고침"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
@@ -327,7 +325,7 @@ export default function MeterTable({
           </button>
           <button
             onClick={() => setShowDownloadModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-zinc-700 text-zinc-200 font-semibold text-sm rounded-lg hover:bg-zinc-600 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-border text-text-primary font-semibold text-sm rounded-lg hover:opacity-80 transition-opacity"
           >
             <Download size={14} />
             이미지 다운로드
@@ -336,22 +334,22 @@ export default function MeterTable({
       </div>
 
       {/* 상태 필터 */}
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap text-xs">
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap text-xs tabular-nums">
         {([
-          { s: null,            label: '전체',    count: processedCount + unprocessedCount + closedCount, cls: 'bg-zinc-700 text-white' },
-          { s: 'processed',     label: '처리됨',  count: processedCount,   cls: 'bg-emerald-400 text-zinc-950' },
-          { s: 'unprocessed',   label: '미처리',  count: unprocessedCount, cls: 'bg-zinc-400 text-zinc-950' },
-          { s: 'closed',        label: '종결',    count: closedCount,      cls: 'bg-amber-400 text-zinc-950' },
+          { s: null,            label: '전체',    count: processedCount + unprocessedCount + closedCount, cls: 'bg-border text-text-primary' },
+          { s: 'processed',     label: '처리됨',  count: processedCount,   cls: 'bg-success text-white dark:text-zinc-950' },
+          { s: 'unprocessed',   label: '미처리',  count: unprocessedCount, cls: 'bg-zinc-400 dark:bg-zinc-600 text-white' },
+          { s: 'closed',        label: '종결',    count: closedCount,      cls: 'bg-warning text-white dark:text-zinc-950' },
         ] as { s: StatusFilter | null; label: string; count: number; cls: string }[]).map(({ s, label, count, cls }) => (
           <button
             key={String(s)}
             onClick={() => handleStatus(s)}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold transition-colors ${
-              status === s ? cls : 'bg-zinc-800 text-zinc-400 hover:text-white'
+              status === s ? cls : 'bg-surface text-text-secondary hover:text-text-primary'
             }`}
           >
             {label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status === s ? 'bg-black/20' : 'bg-zinc-700 text-zinc-400'}`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status === s ? 'bg-black/20' : 'bg-border text-text-secondary'}`}>
               {count}
             </span>
           </button>
@@ -360,7 +358,7 @@ export default function MeterTable({
 
       {/* 날짜 검색 */}
       <form onSubmit={handleDateSearch} className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
+        <span className="flex items-center gap-1 text-xs text-text-secondary shrink-0">
           <Calendar size={12} />조사일자
         </span>
         <input
@@ -368,19 +366,19 @@ export default function MeterTable({
           value={filterDateFrom}
           max={filterDateTo || undefined}
           onChange={(e) => setFilterDateFrom(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400 transition-colors"
+          className="bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text-primary tabular-nums focus:outline-none focus:border-accent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
         />
-        <span className="text-zinc-600 text-xs shrink-0">~</span>
+        <span className="text-text-secondary/60 text-xs shrink-0">~</span>
         <input
           type="date"
           value={filterDateTo}
           min={filterDateFrom || undefined}
           onChange={(e) => setFilterDateTo(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400 transition-colors"
+          className="bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text-primary tabular-nums focus:outline-none focus:border-accent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
         />
         <button
           type="submit"
-          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs rounded-lg transition-colors shrink-0"
+          className="px-3 py-1.5 bg-surface hover:bg-border/60 text-text-secondary hover:text-text-primary text-xs rounded-lg transition-colors shrink-0"
         >
           검색
         </button>
@@ -388,7 +386,7 @@ export default function MeterTable({
           <button
             type="button"
             onClick={clearDateFilter}
-            className="flex items-center gap-1 px-2 py-1.5 text-zinc-500 hover:text-white text-xs rounded-lg transition-colors"
+            className="flex items-center gap-1 px-2 py-1.5 text-text-secondary hover:text-text-primary text-xs rounded-lg transition-colors"
           >
             <X size={12} />초기화
           </button>
@@ -398,20 +396,20 @@ export default function MeterTable({
       {/* 검색창 */}
       <form onSubmit={handleSearch} className="flex gap-2 mb-4">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
           <input
             ref={searchRef}
             type="text"
             placeholder="도면번호 · 도로명주소 · 기물번호(기존) 검색"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-8 pr-8 py-2 text-base md:text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-400 transition-colors"
+            className="w-full bg-surface border border-border rounded-lg pl-8 pr-8 py-2 text-base md:text-sm text-text-primary placeholder-text-secondary/60 focus:outline-none focus:border-accent transition-colors"
           />
           {searchInput && (
             <button
               type="button"
               onClick={clearSearch}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
             >
               <X size={14} />
             </button>
@@ -419,15 +417,15 @@ export default function MeterTable({
         </div>
         <button
           type="submit"
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-sm rounded-lg transition-colors"
+          className="px-4 py-2 bg-surface hover:bg-border/60 text-text-secondary hover:text-text-primary text-sm rounded-lg transition-colors"
         >
           검색
         </button>
       </form>
 
       {search && (
-        <p className="text-xs text-zinc-500 mb-3">
-          <span className="text-emerald-400">"{search}"</span> 검색 결과 {total}개
+        <p className="text-xs text-text-secondary mb-3">
+          <span className="text-accent">"{search}"</span> 검색 결과 {total}개
         </p>
       )}
 
@@ -435,84 +433,84 @@ export default function MeterTable({
       {viewMode === 'map' ? (
         <MeterMapView selectedBlock={selectedBlock} status={status} />
       ) : isEmpty ? (
-        <div className="flex flex-col items-center justify-center py-20 text-zinc-500 border border-zinc-800 rounded-lg">
+        <div className="flex flex-col items-center justify-center py-20 text-text-secondary border border-border rounded-lg">
           <p className="text-sm">데이터가 없습니다.</p>
           <p className="text-xs mt-1">엑셀 파일을 업로드하여 데이터를 가져오세요.</p>
         </div>
       ) : (
         <>
           {/* ─── 데스크톱 테이블 ─── */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-zinc-800">
-            <table className="w-full text-xs min-w-max">
+          <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-xs min-w-max tabular-nums">
               <thead>
-                <tr className="bg-zinc-900 border-b border-zinc-800">
-                  <th className="sticky left-0 z-10 bg-zinc-900 px-3 py-2.5 w-12" />
+                <tr className="bg-surface border-b border-border">
+                  <th className="sticky left-0 z-10 bg-surface px-3 py-2.5 w-12" />
                   <th
-                    className="px-3 py-2.5 text-left font-semibold text-zinc-500 whitespace-nowrap cursor-pointer hover:text-zinc-300 select-none"
+                    className="px-3 py-2.5 text-left font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-text-primary select-none"
                     onClick={() => handleSort('row_no')}
                   >
                     <span className="flex items-center gap-1">도면번호 <SortIcon col="row_no" /></span>
                   </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-500 whitespace-nowrap">성명</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-secondary whitespace-nowrap">성명</th>
                   <th
-                    className="px-3 py-2.5 text-left font-semibold text-zinc-500 whitespace-nowrap cursor-pointer hover:text-zinc-300 select-none"
+                    className="px-3 py-2.5 text-left font-semibold text-text-secondary whitespace-nowrap cursor-pointer hover:text-text-primary select-none"
                     onClick={() => handleSort('address')}
                   >
                     <span className="flex items-center gap-1">도로명주소 <SortIcon col="address" /></span>
                   </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-500 whitespace-nowrap">기물번호(기존)</th>
-                  <th className="w-px bg-zinc-700" />
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">기물번호</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">지침</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">봉인유무</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">위치</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">사용형태</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">층수</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">비고</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-secondary whitespace-nowrap">기물번호(기존)</th>
+                  <th className="w-px bg-border" />
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">기물번호</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">지침</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">봉인유무</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">위치</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">사용형태</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">층수</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">비고</th>
                   <th
-                    className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap cursor-pointer hover:text-white select-none"
+                    className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap cursor-pointer hover:text-accent select-none"
                     onClick={() => handleSort('survey_date')}
                   >
                     <span className="flex items-center gap-1">조사일자 <SortIcon col="survey_date" /></span>
                   </th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">보호통뚜껑양식</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">급수방식</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-zinc-300 whitespace-nowrap">계량기상태</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">보호통뚜껑양식</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">급수방식</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-text-primary whitespace-nowrap">계량기상태</th>
                 </tr>
               </thead>
               <tbody>
                 {records.map((r) => (
                   <tr
                     key={r.id}
-                    className={`border-b border-zinc-800 last:border-0 hover:bg-zinc-900/60 transition-colors ${getStatus(r) === 'processed' ? 'bg-emerald-950/20' : getStatus(r) === 'closed' ? 'bg-amber-950/20' : ''}`}
+                    className={`border-b border-border last:border-0 hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${r.status === 'processed' ? 'bg-success/10' : r.status === 'closed' ? 'bg-warning/10' : ''}`}
                   >
                     {/* 수정 버튼 — sticky */}
-                    <td className={`sticky left-0 z-10 px-2 py-2 border-r border-zinc-800 ${getStatus(r) === 'processed' ? 'bg-emerald-950/40' : getStatus(r) === 'closed' ? 'bg-amber-950/40' : 'bg-zinc-950'}`}>
+                    <td className={`sticky left-0 z-10 px-2 py-2 border-r border-border ${r.status === 'processed' ? 'bg-success/15' : r.status === 'closed' ? 'bg-warning/15' : 'bg-background'}`}>
                       <button
                         onClick={() => setEditingRecord(r)}
-                        className="flex items-center gap-1 px-2 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors whitespace-nowrap"
+                        className="flex items-center gap-1 px-2 py-1.5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors whitespace-nowrap"
                       >
                         <Pencil size={12} />
                         <span className="text-xs">수정</span>
                       </button>
                       <div className="flex items-center gap-2 px-2 mt-0.5">
-                        {getStatus(r) === 'processed' && <span className="text-[10px] text-emerald-400 font-bold">✓</span>}
-                        {getStatus(r) === 'closed' && <span className="text-[10px] text-amber-400 font-bold">{r.note}</span>}
-                        {(r.image1_id || r.image2_id || r.image3_id || r.image4_id) && (
+                        {r.status === 'processed' && <span className="text-[10px] text-success font-bold">✓</span>}
+                        {r.status === 'closed' && <span className="text-[10px] text-warning font-bold">{r.note}</span>}
+                        {r.imageCount > 0 && (
                           <span className="flex items-center gap-1">
-                            <Camera size={10} className="text-emerald-400" />
-                            <span className="text-[10px] text-emerald-400">
-                              {[r.image1_id, r.image2_id, r.image3_id, r.image4_id].filter(Boolean).length}
+                            <Camera size={10} className="text-accent" />
+                            <span className="text-[10px] text-accent">
+                              {r.imageCount}
                             </span>
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-zinc-500 font-mono">{r.row_no ?? '-'}</td>
-                    <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">{r.name ?? '-'}</td>
-                    <td className="px-3 py-2 text-zinc-500 whitespace-nowrap max-w-[180px] truncate">{r.address ?? '-'}</td>
-                    <td className="px-3 py-2 text-zinc-500 font-mono whitespace-nowrap">{r.old_meter_number ?? '-'}</td>
-                    <td className="w-px bg-zinc-800" />
+                    <td className="px-3 py-2 text-text-secondary font-mono">{r.row_no ?? '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{r.name ?? '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap max-w-[180px] truncate">{r.address ?? '-'}</td>
+                    <td className="px-3 py-2 text-text-secondary font-mono whitespace-nowrap">{r.old_meter_number ?? '-'}</td>
+                    <td className="w-px bg-border" />
                     <td className="px-3 py-2 font-mono whitespace-nowrap"><Val value={r.meter_number} /></td>
                     <td className="px-3 py-2"><Val value={r.reading} /></td>
                     <td className="px-3 py-2"><Val value={r.sealed} /></td>
@@ -532,7 +530,7 @@ export default function MeterTable({
 
           {/* ─── 모바일 정렬 바 ─── */}
           <div className="md:hidden flex items-center gap-1.5 mb-3 text-xs">
-            <span className="text-zinc-600 shrink-0">정렬:</span>
+            <span className="text-text-secondary/70 shrink-0">정렬:</span>
             {([
               { col: 'row_no' as SortCol, label: '도면번호' },
               { col: 'address' as SortCol, label: '도로명주소' },
@@ -543,8 +541,8 @@ export default function MeterTable({
                 onClick={() => handleSort(col)}
                 className={`flex items-center gap-0.5 px-2.5 py-1 rounded-lg transition-colors ${
                   sortCol === col
-                    ? 'bg-emerald-400/20 text-emerald-400 font-semibold'
-                    : 'bg-zinc-800 text-zinc-500'
+                    ? 'bg-accent/15 text-accent font-semibold'
+                    : 'bg-surface text-text-secondary'
                 }`}
               >
                 {label}
@@ -556,11 +554,11 @@ export default function MeterTable({
           {/* ─── 모바일 카드 ─── */}
           <div className="md:hidden space-y-2">
             {records.map((r) => {
-              const st = getStatus(r);
+              const st = r.status;
               const cardCls =
-                st === 'processed' ? 'bg-emerald-950/30 border-emerald-900/60' :
-                st === 'closed'    ? 'bg-amber-950/30 border-amber-900/60' :
-                'bg-zinc-900 border-zinc-800';
+                st === 'processed' ? 'bg-success/10 border-success/30' :
+                st === 'closed'    ? 'bg-warning/10 border-warning/30' :
+                'bg-surface border-border';
               return (
                 <div key={r.id} className={`border rounded-xl overflow-hidden ${cardCls}`}>
                   {/* 카드 상단 정보 */}
@@ -569,29 +567,29 @@ export default function MeterTable({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           {r.row_no && (
-                            <span className="text-zinc-500 text-xs font-mono shrink-0">도면{r.row_no}</span>
+                            <span className="text-text-secondary text-xs font-mono shrink-0">도면{r.row_no}</span>
                           )}
                           {st === 'processed' && (
-                            <span className="shrink-0 text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">완료</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">완료</span>
                           )}
                           {st === 'closed' && (
-                            <span className="shrink-0 text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">{r.note}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">{r.note}</span>
                           )}
                           {r.meter_number && (
-                            <span className="text-zinc-300 text-xs font-mono truncate">{r.meter_number}</span>
+                            <span className="text-text-primary text-xs font-mono truncate">{r.meter_number}</span>
                           )}
                         </div>
-                        <p className="text-white text-sm font-semibold truncate">{r.address ?? '-'}</p>
+                        <p className="text-text-primary text-sm font-semibold truncate">{r.address ?? '-'}</p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {r.address && (
                           <>
                             <button
                               onClick={() => copyAddress(r)}
-                              className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                              className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                             >
                               {copiedId === r.id
-                                ? <Check size={13} className="text-emerald-400" />
+                                ? <Check size={13} className="text-success" />
                                 : <Copy size={13} />}
                             </button>
                             <button
@@ -599,7 +597,7 @@ export default function MeterTable({
                                 const query = encodeURIComponent(r.address!);
                                 window.location.href = `nmap://search?query=${query}`;
                               }}
-                              className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-zinc-800 transition-colors"
+                              className="p-1.5 rounded-lg text-text-secondary hover:text-accent hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                             >
                               <MapPin size={13} />
                             </button>
@@ -612,7 +610,7 @@ export default function MeterTable({
                   {/* 수정 버튼 — 카드 하단 풀너비 */}
                   <button
                     onClick={() => setEditingRecord(r)}
-                    className="w-full flex items-center justify-center gap-2 py-3 border-t border-zinc-800 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3 border-t border-border text-sm text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                   >
                     <Pencil size={14} />
                     수정
@@ -625,32 +623,32 @@ export default function MeterTable({
           {/* 페이지네이션 */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <p className="text-zinc-500 text-xs">
+              <p className="text-text-secondary text-xs tabular-nums">
                 {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}개
               </p>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => navigate(page - 1)}
                   disabled={page <= 1}
-                  className="p-1.5 bg-zinc-800 text-zinc-400 hover:text-white rounded-lg disabled:opacity-30 transition-colors"
+                  className="p-1.5 bg-surface text-text-secondary hover:text-text-primary rounded-lg disabled:opacity-30 transition-colors"
                 >
                   <ChevronLeft size={14} />
                 </button>
-                <span className="md:hidden px-3 py-1.5 text-xs text-zinc-400">
+                <span className="md:hidden px-3 py-1.5 text-xs text-text-secondary tabular-nums">
                   {page} / {totalPages}
                 </span>
-                <div className="hidden md:flex items-center gap-1">
+                <div className="hidden md:flex items-center gap-1 tabular-nums">
                   {paginationRange.map((p, i) =>
                     p === '…' ? (
-                      <span key={`ell-${i}`} className="px-2 text-zinc-600 text-xs">…</span>
+                      <span key={`ell-${i}`} className="px-2 text-text-secondary/60 text-xs">…</span>
                     ) : (
                       <button
                         key={p}
                         onClick={() => navigate(p as number)}
                         className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                           p === page
-                            ? 'bg-emerald-400 text-zinc-950 font-semibold'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                            ? 'bg-accent text-white dark:text-zinc-950 font-semibold'
+                            : 'bg-surface text-text-secondary hover:text-text-primary'
                         }`}
                       >
                         {p}
@@ -661,7 +659,7 @@ export default function MeterTable({
                 <button
                   onClick={() => navigate(page + 1)}
                   disabled={page >= totalPages}
-                  className="p-1.5 bg-zinc-800 text-zinc-400 hover:text-white rounded-lg disabled:opacity-30 transition-colors"
+                  className="p-1.5 bg-surface text-text-secondary hover:text-text-primary rounded-lg disabled:opacity-30 transition-colors"
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -673,44 +671,44 @@ export default function MeterTable({
 
       {showDownloadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowDownloadModal(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-surface border border-border rounded-xl p-6 w-80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold text-sm">이미지 다운로드</h3>
-              <button onClick={() => setShowDownloadModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+              <h3 className="text-text-primary font-semibold text-sm">이미지 다운로드</h3>
+              <button onClick={() => setShowDownloadModal(false)} className="text-text-secondary hover:text-text-primary transition-colors">
                 <X size={16} />
               </button>
             </div>
             <div className="space-y-3 mb-4">
               <div>
-                <p className="text-xs text-zinc-400 mb-2">날짜 범위 (비우면 전체)</p>
+                <p className="text-xs text-text-secondary mb-2">날짜 범위 (비우면 전체)</p>
                 <div className="flex flex-col gap-1.5">
                   <input
                     type="date"
                     value={downloadDateFrom}
                     max={downloadDateTo || undefined}
                     onChange={(e) => setDownloadDateFrom(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary tabular-nums focus:outline-none focus:border-accent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
                   />
                   <div className="flex items-center gap-1.5">
-                    <div className="flex-1 h-px bg-zinc-700" />
-                    <span className="text-zinc-600 text-xs">~</span>
-                    <div className="flex-1 h-px bg-zinc-700" />
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-text-secondary/60 text-xs">~</span>
+                    <div className="flex-1 h-px bg-border" />
                   </div>
                   <input
                     type="date"
                     value={downloadDateTo}
                     min={downloadDateFrom || undefined}
                     onChange={(e) => setDownloadDateTo(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary tabular-nums focus:outline-none focus:border-accent transition-colors [color-scheme:light] dark:[color-scheme:dark]"
                   />
                 </div>
               </div>
               <div>
-                <p className="text-xs text-zinc-400 mb-2">블록 (이미지 다운로드에만 적용, 비우면 전체)</p>
+                <p className="text-xs text-text-secondary mb-2">블록 (이미지 다운로드에만 적용, 비우면 전체)</p>
                 <select
                   value={downloadBlock}
                   onChange={(e) => setDownloadBlock(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
                 >
                   <option value="">전체 블록</option>
                   {blocks.map((b) => (
@@ -723,7 +721,7 @@ export default function MeterTable({
               <button
                 onClick={async () => { setShowDownloadModal(false); await handleImageDownload(downloadDateFrom || undefined, downloadDateTo || undefined, downloadBlock || undefined); }}
                 disabled={isImageDownloading}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold text-sm rounded-lg disabled:opacity-50 transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-border hover:opacity-80 text-text-primary font-semibold text-sm rounded-lg disabled:opacity-50 transition-opacity"
               >
                 {isImageDownloading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
                 이미지 ZIP 다운로드
@@ -733,15 +731,15 @@ export default function MeterTable({
         </div>
       )}
       {imageProgress && (
-        <div className="fixed bottom-4 right-4 z-50 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shadow-2xl w-64">
+        <div className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded-xl px-4 py-3 shadow-2xl w-64">
           <div className="flex items-center gap-2 mb-2">
-            <RefreshCw size={13} className="animate-spin text-emerald-400 shrink-0" />
-            <p className="text-sm text-white font-semibold">이미지 ZIP 생성 중</p>
+            <RefreshCw size={13} className="animate-spin text-accent shrink-0" />
+            <p className="text-sm text-text-primary font-semibold">이미지 ZIP 생성 중</p>
           </div>
-          <p className="text-xs text-zinc-400 mb-2">{imageProgress.current} / {imageProgress.total}개 완료</p>
-          <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+          <p className="text-xs text-text-secondary mb-2 tabular-nums">{imageProgress.current} / {imageProgress.total}개 완료</p>
+          <div className="h-1.5 bg-border rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-400 rounded-full transition-all duration-200"
+              className="h-full bg-accent rounded-full transition-all duration-200"
               style={{ width: `${(imageProgress.current / imageProgress.total) * 100}%` }}
             />
           </div>

@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient as createServerClient } from '@/shared/lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export async function loginAction(formData: FormData) {

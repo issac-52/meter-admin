@@ -80,13 +80,19 @@ npm run dev
 ```
 app/
   admin/
-    login/          로그인
-    meter/          야장관리 (목록 + 수정)
-    meter-excel/    엑셀관리자 (차분/양식 채우기)
-    api/            서버 API 라우트
-components/admin/   UI 컴포넌트
-lib/                Supabase, R2 클라이언트
-middleware.ts       인증 보호
+    login/          로그인 (얇음)
+    meter/          야장관리 (얇음)
+    meter-excel/    엑셀관리자 (얇음)
+    regions/        분류관리 (얇음)
+    api/            서버 API 라우트 (대부분 features/*/api/*.ts re-export)
+features/
+  meter-survey/     야장관리 + 분류관리 도메인 (컴포넌트, Server Actions, 이미지/지오코딩 API)
+  excel-manager/    엑셀 업로드/양식채우기/다운로드 도메인
+  auth/             로그인/로그아웃
+shared/
+  ui/               여러 도메인이 공유하는 UI (AdminNav 등)
+  lib/              Supabase, R2 클라이언트
+proxy.ts            인증 보호 (Next.js 16, middleware.ts 대신)
 ```
 
 상세 구조와 설계 의도는 [`ARCHITECTURE.md`](./ARCHITECTURE.md)를 참고하세요.

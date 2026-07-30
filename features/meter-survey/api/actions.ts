@@ -1,45 +1,9 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/shared/lib/supabase/admin';
+import { createClient as createServerClient } from '@/shared/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-
-export type MeterRecord = {
-  id: number;
-  block: string;
-  row_no: string | null;
-  name: string | null;
-  address: string | null;
-  old_meter_number: string | null;
-  meter_number: string | null;
-  reading: string | null;
-  sealed: string | null;
-  location: string | null;
-  usage_type: string | null;
-  floor: string | null;
-  note: string | null;
-  survey_date: string | null;
-  cover_type: string | null;
-  water_supply_type: string | null;
-  meter_condition: string | null;
-  image1_id: string | null;
-  image2_id: string | null;
-  image3_id: string | null;
-  image4_id: string | null;
-  manufacturer: string | null;
-  relocation_needed: string | null;
-  replacement_needed: string | null;
-  water_tank_capacity: string | null;
-  water_pressure: string | null;
-  meter_type: string | null;
-  reading_method: string | null;
-  final_reading: string | null;
-  lat: number | null;
-  lng: number | null;
-  created_at: string;
-};
-
-export type MeterInsert = Omit<MeterRecord, 'id' | 'created_at'>;
+import type { MeterRecord, MeterInsert } from '@/shared/types/meter-record';
 
 async function requireAuth() {
   const supabase = await createServerClient();

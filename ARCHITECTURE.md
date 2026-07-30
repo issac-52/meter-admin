@@ -93,7 +93,7 @@ proxy.ts  (Next.js 16에서 middleware.ts 대신 사용)
 
 ## 엑셀 처리
 
-### 업로드 (MeterExcelUpload.tsx)
+### 업로드 (features/excel-manager/components/MeterExcelUpload.tsx)
 
 엑셀을 파싱해 DB에 INSERT합니다. 두 가지 형식을 자동 감지합니다.
 
@@ -104,7 +104,7 @@ proxy.ts  (Next.js 16에서 middleware.ts 대신 사용)
 
 같은 블록을 업로드하면 해당 블록 전체를 **DELETE 후 INSERT**합니다. 부분 업데이트가 아니라 전체 교체입니다.
 
-### 양식 채우기 (template-fill/route.ts)
+### 양식 채우기 (features/excel-manager/api/template-fill.ts, `app/admin/api/template-fill/route.ts`는 re-export wrapper)
 
 원본 xlsx 파일(양식)에 DB 데이터를 채워 넣습니다. `xlsx` 라이브러리 대신 **JSZip으로 XML을 직접 조작**합니다.
 
@@ -130,18 +130,58 @@ proxy.ts  (Next.js 16에서 middleware.ts 대신 사용)
 
 ---
 
-## 컴포넌트 구조
+## 핵심 파일 맵
+
+도메인(기능) 기준으로 `features/`에 모여 있고, 여러 도메인이 공유하는 것만 `shared/`에 있습니다. Next.js가 강제하는 `page.tsx`/`layout.tsx`/`route.ts`는 URL 경로상 `app/` 밑에 있어야 해서 그대로 두되, 실제 로직은 대부분 `features/*/api/`, `features/*/components/`를 얇게 참조만 합니다.
 
 ```
-MeterTable (목록, 필터, 페이지네이션, 다운로드)
-  └── MeterEditModal (수정 모달)
-        └── ImageSlotCard × 4 (이미지 슬롯)
-  └── MeterMapView (지도 뷰)
-        └── MeterEditModal (지도에서 클릭 시 수정)
+app/
+  admin/
+    login/page.tsx           로그인 페이지 (얇음, LoginForm만 렌더)
+    meter/page.tsx            야장관리 페이지 (서버 컴포넌트, 얇음)
+    meter-excel/page.tsx      엑셀관리자 페이지 (얇음)
+    regions/page.tsx          분류관리 페이지 (얇음)
+    api/*/route.ts            route.ts는 대부분 features/*/api/*.ts 를 re-export하는 wrapper
+  layout.tsx, page.tsx         앱 셸 / 루트 리다이렉트
 
-MeterExcelDiff (차분 다운로드)
-MeterTemplateFill (양식 채우기)
-MeterExcelUpload (업로드 모달)
+features/
+  meter-survey/               야장관리 도메인
+    api/
+      actions.ts               getMeterRecords, importFromExcel, updateMeterRecord 등 CRUD Server Actions
+      regions-actions.ts       분류관리(블록↔지역) Server Actions
+      geocode.ts               /admin/api/geocode 로직
+      image-list.ts            /admin/api/image-list 로직
+      image-proxy.ts           /admin/api/image-proxy 로직
+      upload-meter-image.ts    /admin/api/upload-meter-image 로직 (presigned URL 발급/저장/삭제)
+      mobile-presign.ts        모바일 앱 전용 presigned URL 발급
+    components/
+      MeterTable.tsx            목록, 필터, 페이지네이션, 다운로드
+        └── MeterEditModal.tsx  수정 모달 (이미지 슬롯 × 4 포함)
+        └── MeterMapView.tsx    지도 뷰 (클릭 시 MeterEditModal)
+      RegionsClient.tsx         분류관리 UI
+
+  excel-manager/               엑셀관리자 도메인
+    api/
+      template-fill.ts          원본 양식 채우기 (JSZip XML 직접 조작 — 절대 건드리지 말 것)
+      export-excel.ts           DB 전체 컬럼 엑셀 다운로드
+      blocks.ts                 블록 목록 API
+    components/
+      MeterExcelUpload.tsx       업로드 모달 (기존/대불 형식 자동 감지)
+      MeterExcelExport.tsx       DB 데이터 엑셀 다운로드 UI
+      MeterTemplateFill.tsx      양식 채우기 UI
+      MeterExcelDiff.tsx         차분 다운로드 (현재 어디서도 사용 안 되는 미사용 컴포넌트)
+
+  auth/                        인증 도메인
+    api/actions.ts              loginAction, logoutAction
+    components/LoginForm.tsx    로그인 폼
+
+shared/
+  ui/AdminNav.tsx               사이드바/탑바/바텀내브 (모든 도메인이 공유)
+  lib/
+    supabase/{admin,server,client}.ts   Supabase 클라이언트 (admin=service role, server=세션검증, client=브라우저)
+    r2-storage.ts                        R2 업로드/삭제/presigned URL
+
+proxy.ts                        인증 미들웨어 (도메인 무관, 루트 유지)
 ```
 
 `MeterTable`은 클라이언트 컴포넌트이고, 상위 `meter/page.tsx`는 서버 컴포넌트입니다. 필터·정렬·페이지네이션은 모두 URL 쿼리스트링으로 관리하며, 상태 변경 시 `router.push()`로 URL을 업데이트하면 서버에서 다시 데이터를 조회합니다.
