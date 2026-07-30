@@ -3,6 +3,8 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import * as XLSX from "xlsx";
 import { type MeterRecord, getMeterStatus } from "@/shared/types/meter-record";
+import { getUserRole } from "@/shared/lib/auth/get-user-role";
+import { maskName } from "@/features/meter-survey/types/mappers";
 
 export const maxDuration = 60;
 
@@ -25,6 +27,7 @@ export async function GET(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
+  const role = await getUserRole();
 
   const { searchParams } = new URL(req.url);
   const dateFrom = searchParams.get("dateFrom");
@@ -73,7 +76,7 @@ export async function GET(req: NextRequest) {
   const rows = records.map((r) => ({
     도면번호: r.row_no ?? "",
     블록: r.block ?? "",
-    성명: r.name ?? "",
+    성명: (role === "admin" ? r.name : maskName(r.name)) ?? "",
     주소: r.address ?? "",
     기존기물번호: r.old_meter_number ?? "",
     신규기물번호: r.meter_number ?? "",

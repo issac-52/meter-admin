@@ -69,11 +69,6 @@ function str(val: unknown): string | null {
   return s === '' ? null : s;
 }
 
-function maskName(name: string | null): string | null {
-  if (!name) return null;
-  return name.length <= 1 ? name + '*' : name[0] + '*'.repeat(name.length - 1);
-}
-
 export default function MeterExcelUpload({ onClose }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [allRows, setAllRows] = useState<MeterInsert[]>([]);
@@ -145,7 +140,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
 
         return {
           row_no: str(row[DB_COL.ROW_NO]),
-          name: maskName(str(row[DB_COL.NAME])),
+          name: str(row[DB_COL.NAME]),
           address: str(row[DB_COL.ADDRESS]),
           block: str(row[DB_COL.BLOCK]),
           old_meter_number: oldMeter,
@@ -215,11 +210,7 @@ export default function MeterExcelUpload({ onClose }: Props) {
           raw !== null && raw !== undefined && String(raw).trim() !== ''
             ? String(raw).trim()
             : null;
-        if (dbKey === 'name' && val) {
-          (row as Record<string, unknown>)[dbKey] = maskName(val);
-        } else {
-          (row as Record<string, unknown>)[dbKey] = val;
-        }
+        (row as Record<string, unknown>)[dbKey] = val;
       }
       // 급수방식: 3개 컬럼 → 1개 필드
       const wDirect = r['__EMPTY_19'] != null && String(r['__EMPTY_19']).trim() ? String(r['__EMPTY_19']).trim() : null;

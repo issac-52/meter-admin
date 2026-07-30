@@ -6,6 +6,13 @@ export { getMeterStatus };
 // 지역(region)에 배정되지 않은 블록만 보기 위한 가상 지역 ID
 export const UNASSIGNED_REGION_ID = '__unassigned__';
 
+// ─── 실명 마스킹 (role 기반 표시) ──────────────────────────────────────────────
+
+export function maskName(name: string | null): string | null {
+  if (!name) return null;
+  return name.length <= 1 ? name + '*' : name[0] + '*'.repeat(name.length - 1);
+}
+
 // ─── MeterTable ──────────────────────────────────────────────────────────────
 
 export type MeterTableRow = MeterRecord & {

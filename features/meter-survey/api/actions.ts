@@ -4,6 +4,8 @@ import { createAdminClient } from '@/shared/lib/supabase/admin';
 import { createClient as createServerClient } from '@/shared/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { MeterRecord, MeterInsert } from '@/shared/types/meter-record';
+import { getUserRole, type UserRole } from '@/shared/lib/auth/get-user-role';
+import { maskName } from '@/features/meter-survey/types/mappers';
 
 async function requireAuth() {
   const supabase = await createServerClient();
@@ -11,6 +13,12 @@ async function requireAuth() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
+}
+
+// role이 admin이 아니면 실명을 마스킹해서 반환 (실명 원본이 네트워크 응답에 노출되지 않도록 반드시 여기서 결정)
+function withNameMasking<T extends { name: string | null }>(rows: T[], role: UserRole): T[] {
+  if (role === 'admin') return rows;
+  return rows.map((r) => ({ ...r, name: maskName(r.name) }));
 }
 
 export type SortCol = 'row_no' | 'address' | 'survey_date';
@@ -103,8 +111,10 @@ export async function getMeterRecords(
   const [{ data, count, error }, { count: totalCount }, { count: closedCount }, { count: processedCount }] =
     await Promise.all([mainQuery, totalQuery, closedQuery, processedQuery]);
 
+  const role = await getUserRole();
+
   return {
-    data: (data ?? []) as MeterRecord[],
+    data: withNameMasking((data ?? []) as MeterRecord[], role),
     count: count ?? 0,
     totalCount: totalCount ?? 0,
     processedCount: processedCount ?? 0,
@@ -204,7 +214,8 @@ export async function getMeterRecordsWithSurveyData(): Promise<MeterRecord[]> {
     .or('meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,note.eq.호폐')
     .order('block', { ascending: true })
     .order('row_no', { ascending: true, nullsFirst: false });
-  return (data ?? []) as MeterRecord[];
+  const role = await getUserRole();
+  return withNameMasking((data ?? []) as MeterRecord[], role);
 }
 
 export async function getMeterRecordsForExport(blocks: string[]): Promise<MeterRecord[]> {
@@ -214,7 +225,8 @@ export async function getMeterRecordsForExport(blocks: string[]): Promise<MeterR
     .from('meter_records')
     .select('*')
     .in('block', blocks);
-  return (data ?? []) as MeterRecord[];
+  const role = await getUserRole();
+  return withNameMasking((data ?? []) as MeterRecord[], role);
 }
 
 function nextDay(date: string) {
@@ -239,7 +251,8 @@ export async function getCompletedRecords(dateFrom?: string, dateTo?: string): P
   if (dateFrom) query = query.gte('survey_date', dateFrom);
   if (dateTo) query = query.lt('survey_date', nextDay(dateTo));
   const { data } = await query;
-  return (data ?? []) as MeterRecord[];
+  const role = await getUserRole();
+  return withNameMasking((data ?? []) as MeterRecord[], role);
 }
 
 export async function getRecordsWithImages(dateFrom?: string, dateTo?: string): Promise<Pick<MeterRecord, 'id' | 'block' | 'row_no' | 'image1_id' | 'image2_id' | 'image3_id' | 'image4_id' | 'survey_date'>[]> {
@@ -280,7 +293,8 @@ export async function getMeterRecordsForMap(block?: string, status?: StatusFilte
     query = query.or(NOT_CLOSED).or(ANY_EMPTY);
   }
   const { data } = await query;
-  return (data ?? []) as MeterRecord[];
+  const role = await getUserRole();
+  return withNameMasking((data ?? []) as MeterRecord[], role);
 }
 
 export async function getBlockRowNos(block: string): Promise<string[]> {
