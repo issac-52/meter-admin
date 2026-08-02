@@ -11,14 +11,10 @@ type NavItem = { href: string; label: string; icon: typeof ClipboardList };
 type NavGroup = NavItem & { children?: NavItem[] };
 
 const NAV_ITEMS: NavGroup[] = [
-  {
-    href: '/admin/meter',
-    label: '수용가조사',
-    icon: ClipboardList,
-    children: [{ href: '/admin/regions', label: '분류관리', icon: FolderTree }],
-  },
-  { href: '/admin/meter-excel', label: '엑셀관리자', icon: FileSpreadsheet },
+  { href: '/admin/meter', label: '수용가조사', icon: ClipboardList },
   { href: '/admin/valve', label: '밸브관리', icon: Droplet },
+  { href: '/admin/regions', label: '분류관리', icon: FolderTree },
+  { href: '/admin/meter-excel', label: '엑셀관리자', icon: FileSpreadsheet },
 ];
 
 // 모바일 상단바/하단바용 평탄화 목록 (부모-자식 구분 없이 순서대로)

@@ -38,46 +38,26 @@ export async function GET(req: NextRequest) {
 
   const VALVE_TYPE_LABEL: Record<string, string> = { 제수밸브: '제수(이토)밸브', 소화전: '소화전', 공기밸브: '공기밸브' };
 
+  // 지도클릭 수동입력폼에서 실제로 다루는 항목만 노출 (엑셀 업로드 전용 부가항목은 제외)
   const rows = allData.map((r) => ({
     블록: r.block ?? '',
     밸브번호: r.valve_no ?? '',
     종류: VALVE_TYPE_LABEL[r.valve_type] ?? r.valve_type,
     구주소: r.old_address ?? '',
     도로명주소: r.road_address ?? '',
-    도엽번호: r.map_sheet_no ?? '',
-    위도: r.lat ?? '',
-    경도: r.lng ?? '',
     구경: r.hydrant_diameter ?? r.valve_diameter ?? '',
     밸브구경: r.hydrant_valve_diameter ?? '',
     개폐여부: r.open_close ?? '',
     형식: r.valve_form ?? r.hydrant_type ?? '',
     밸브재질: r.valve_material ?? '',
     구동방법: r.drive_method ?? '',
-    회전방향: r.rotation_direction ?? '',
-    현회전수: r.rotation_count ?? '',
-    총회전수: r.total_rotation_count ?? '',
-    제작회사: r.manufacturer ?? '',
-    설치일자: r.install_date ?? '',
     보호통규격: r.protection_pipe_spec ?? '',
     철개규격: r.cover_spec ?? '',
     밸브실규격: r.valve_room_spec ?? '',
     밸브실심도: r.valve_room_depth ?? '',
-    표고: r.elevation ?? '',
-    관련제수밸브구경: r.related_valve_diameter ?? '',
-    관련제수밸브개폐여부: r.related_valve_open_close ?? '',
-    수압측정위치: r.pressure_location ?? '',
-    수압측정표고: r.pressure_elevation ?? '',
-    수압: r.pressure_value ?? '',
-    동수두: r.dynamic_head ?? '',
-    차이: r.head_diff ?? '',
-    시설명: r.facility_name ?? '',
-    급수탑높이: r.water_tower_height ?? '',
-    문제사항: r.valve_issue ?? '',
-    밸브실문제사항: r.issue ?? '',
+    문제사항: r.issue ?? '',
     비고: r.note ?? '',
-    조사자: r.surveyor ?? '',
-    조사일자: r.survey_date_text ?? r.survey_date ?? '',
-    생성일: r.created_at ? r.created_at.slice(0, 10) : '',
+    등록일: r.created_at ? r.created_at.slice(0, 10) : '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -90,7 +70,7 @@ export async function GET(req: NextRequest) {
   const label = block ? `_${block}블록` : '';
   const fileName = encodeURIComponent(`밸브데이터${label}_${today}.xlsx`);
 
-  return new NextResponse(buf.buffer as ArrayBuffer, {
+  return new NextResponse(new Uint8Array(buf).buffer as ArrayBuffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename*=UTF-8''${fileName}`,

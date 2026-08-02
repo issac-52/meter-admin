@@ -2,13 +2,12 @@
 
 import { useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Pencil, Download, Upload, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map } from 'lucide-react';
+import { Pencil, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map } from 'lucide-react';
 import type { ValveSortCol, ValveSortDir } from '@/features/valve-survey/api/actions';
 import type { ValveRecord, ValveType } from '@/shared/types/valve-record';
-import { VALVE_TYPE_OPTIONS, VALVE_TYPE_LABEL } from '@/features/valve-survey/types/mappers';
+import { VALVE_TYPE_LABEL } from '@/features/valve-survey/types/mappers';
 import ValveFormModal from './ValveFormModal';
 import ValveMapView from './ValveMapView';
-import ValveExcelUpload from './ValveExcelUpload';
 
 type Props = {
   records: ValveRecord[];
@@ -56,10 +55,8 @@ export default function ValveTable({
   const router = useRouter();
   const pathname = usePathname();
   const [editingRecord, setEditingRecord] = useState<ValveRecord | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
   const [searchInput, setSearchInput] = useState(search);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -67,35 +64,6 @@ export default function ValveTable({
     setIsRefreshing(true);
     router.refresh();
     setTimeout(() => setIsRefreshing(false), 800);
-  }
-
-  async function handleDownload() {
-    setIsDownloading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedBlock) params.set('block', selectedBlock);
-      const res = await fetch(`/admin/api/valve-export-excel?${params}`);
-      if (!res.ok) {
-        alert((await res.text()) || '서버 오류가 발생했습니다.');
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const today = new Date().toISOString().slice(0, 10);
-      const label = selectedBlock ? `_${selectedBlock}블록` : '';
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `밸브데이터${label}_${today}.xlsx`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      alert('처리 중 오류가 발생했습니다.');
-    } finally {
-      setIsDownloading(false);
-    }
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -187,21 +155,7 @@ export default function ValveTable({
             title="새로고침"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-          </button>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-surface text-text-secondary hover:text-text-primary text-sm rounded-lg hover:bg-border/60 transition-colors"
-          >
-            <Upload size={14} />
-            <span className="hidden sm:inline">업로드</span>
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading}
-            className="flex items-center gap-1.5 px-4 py-2 bg-border text-text-primary font-semibold text-sm rounded-lg hover:opacity-80 disabled:opacity-50 transition-opacity"
-          >
-            {isDownloading ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-            <span className="hidden sm:inline">엑셀 다운로드</span>
+            <span className="hidden sm:inline">새로고침</span>
           </button>
         </div>
       </div>
@@ -264,7 +218,7 @@ export default function ValveTable({
       ) : isEmpty ? (
         <div className="flex flex-col items-center justify-center py-20 text-text-secondary border border-border rounded-lg">
           <p className="text-sm">데이터가 없습니다.</p>
-          <p className="text-xs mt-1">지도에서 위치를 클릭해 등록하거나 엑셀을 업로드하세요.</p>
+          <p className="text-xs mt-1">지도에서 위치를 클릭해 등록하거나 엑셀관리자에서 업로드하세요.</p>
         </div>
       ) : (
         <>
@@ -375,8 +329,6 @@ export default function ValveTable({
           )}
         </>
       )}
-
-      {showUpload && <ValveExcelUpload onClose={() => { setShowUpload(false); router.refresh(); }} />}
 
       {editingRecord && (
         <ValveFormModal

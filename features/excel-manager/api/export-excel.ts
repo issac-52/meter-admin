@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
   const label = block ? `_${block}블록` : "";
   const fileName = encodeURIComponent(`야장데이터${label}_${today}.xlsx`);
 
-  return new NextResponse(buf.buffer as ArrayBuffer, {
+  return new NextResponse(new Uint8Array(buf).buffer as ArrayBuffer, {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
