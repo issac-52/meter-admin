@@ -35,6 +35,9 @@ export default function ValveMapView() {
   const activeMarkers = useRef<Map<number, any>>(new Map());
   const userMarker = useRef<any>(null);
   const clickMarker = useRef<any>(null);
+  // 모바일에서 탭 직후 브라우저가 뒤늦게 합성 클릭 이벤트를 발생시켜, 방금 열린
+  // 바텀시트 배경(backdrop)에 그 클릭이 그대로 꽂혀 즉시 닫히는 문제 방지용 가드
+  const suppressBackdropCloseUntil = useRef(0);
 
   const [records, setRecords] = useState<ValveRecord[]>([]);
   const [blocks, setBlocks] = useState<string[]>([]);
@@ -166,6 +169,7 @@ export default function ValveMapView() {
       setGeocodeError(null);
       setPending(null);
       setClickPoint({ lat, lng });
+      suppressBackdropCloseUntil.current = Date.now() + 500;
 
       if (clickMarker.current) clickMarker.current.setMap(null);
       clickMarker.current = new nm.Marker({
@@ -203,6 +207,12 @@ export default function ValveMapView() {
     setPending(null);
     setGeocodeError(null);
     if (clickMarker.current) { clickMarker.current.setMap(null); clickMarker.current = null; }
+  }
+
+  function handleBackdropClick() {
+    // 방금 지도를 탭해서 열린 시트라면, 뒤이어 브라우저가 발생시키는 합성 클릭을 무시
+    if (Date.now() < suppressBackdropCloseUntil.current) return;
+    clearClick();
   }
 
   function confirmClick() {
@@ -249,7 +259,7 @@ export default function ValveMapView() {
       {clickPoint && !creating && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
-          onClick={clearClick}
+          onClick={handleBackdropClick}
         >
           <div
             className="w-full max-w-lg bg-surface border border-border rounded-t-2xl p-4 pb-safe"
