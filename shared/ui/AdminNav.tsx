@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ClipboardList, LogOut, FileSpreadsheet, FolderTree, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { ClipboardList, LogOut, FileSpreadsheet, FolderTree, ChevronLeft, ChevronRight, Sun, Moon, Droplet } from 'lucide-react';
 import { logoutAction } from '@/features/auth/api/actions';
 
 type NavItem = { href: string; label: string; icon: typeof ClipboardList };
@@ -18,6 +18,7 @@ const NAV_ITEMS: NavGroup[] = [
     children: [{ href: '/admin/regions', label: '분류관리', icon: FolderTree }],
   },
   { href: '/admin/meter-excel', label: '엑셀관리자', icon: FileSpreadsheet },
+  { href: '/admin/valve', label: '밸브관리', icon: Droplet },
 ];
 
 // 모바일 상단바/하단바용 평탄화 목록 (부모-자식 구분 없이 순서대로)
