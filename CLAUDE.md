@@ -5,75 +5,89 @@
 ## 스택
 - Next.js 16 App Router, TypeScript, Tailwind CSS v4
 - Supabase (auth + DB), Cloudflare R2 (이미지 스토리지), Naver Maps API
+- next-themes (라이트/다크모드)
 
-## 핵심 파일 맵
+## 폴더 구조 (도메인 기준)
 
 ```
-proxy.ts                               # 인증 보호 — 미인증 시 /admin/login 리다이렉트 (Next.js 16: middleware.ts → proxy.ts)
+proxy.ts                                # 인증 보호 — 미인증 시 /admin/login 리다이렉트
 app/
   admin/
-    _actions.ts                        # loginAction, logoutAction (로그인 후 /admin/meter)
-    login/page.tsx                     # 로그인 페이지 (진입점)
-    meter/
-      page.tsx                         # 야장관리 메인 (서버 컴포넌트)
-      _actions.ts                      # DB CRUD, getMeterRecords, getCompletedRecords 등
-    meter-excel/page.tsx               # 엑셀관리자 (차분 다운로드 / 양식 채우기)
+    login/page.tsx
+    meter/page.tsx                      # 야장관리 메인 (서버 컴포넌트)
+    meter-excel/page.tsx                # 엑셀관리자
     api/
-      template-fill/route.ts           # 대불/기존 양식 채우기 — JSZip으로 xlsx 직접 조작
-      upload-meter-image/route.ts      # R2 presigned URL 발급 + DB 이미지 경로 저장
-      image-list/route.ts              # 이미지 목록 조회 (ZIP 다운로드용)
-      image-proxy/route.ts             # R2 이미지 프록시
-      geocode/route.ts                 # Naver Maps 지오코딩 → lat/lng DB 저장
+      template-fill/route.ts
+      upload-meter-image/route.ts
+      image-list/route.ts
+      image-proxy/route.ts
+      geocode/route.ts
+features/
+  meter-survey/                         # 야장관리 도메인
+    api/                                # _actions.ts (getMeterRecords 등 Server Actions)
+    components/                         # MeterTable, MeterEditModal, MeterMapView
+    types/                              # DTO/ViewModel + mapper (maskName 포함)
+  excel-manager/                        # 엑셀관리자 도메인
+    api/                                # template-fill 연동, 업로드 파싱 (형식별 파서)
+    components/                         # MeterExcelUpload, MeterExcelDiff, MeterTemplateFill
+    types/
+  auth/                                 # 인증 도메인
+    api/                                # loginAction, logoutAction, profiles role 조회
 components/admin/
-  MeterTable.tsx                       # 야장 목록 테이블 (필터/정렬/페이지네이션/다운로드)
-  MeterEditModal.tsx                   # 야장 레코드 수정 모달 (핵심 입력 UI)
-  MeterExcelUpload.tsx                 # 엑셀 업로드 (기존/대불 형식 자동 감지)
-  MeterExcelDiff.tsx                   # 차분 다운로드 (기제출 엑셀 비교)
-  MeterTemplateFill.tsx                # 양식 채우기 UI
-  MeterMapView.tsx                     # Naver Maps 지도 뷰
-  AdminNav.tsx                         # 사이드바/상단바/하단탭바
-lib/
-  supabase/{admin,server,client}.ts    # Supabase 클라이언트
-  r2-storage.ts                        # R2 업로드/삭제/presign
+  AdminNav.tsx                          # 사이드바 (접이식) + 다크모드 토글
+shared/
+  ui/
+  lib/
+    supabase/{admin,server,client}.ts
+    r2-storage.ts
+  types/                                # meter_records 공통 DTO 스키마 (Zod)
 ```
 
-## DB 테이블: `meter_records`
+## 레이어 원칙
 
-주요 컬럼:
-- `id`, `block`, `row_no`, `name`, `address`, `old_meter_number`
-- `meter_number`, `reading`, `sealed` (봉인/미봉인), `location`
-- `usage_type`, `floor`, `note`, `survey_date`
-- `cover_type`, `water_supply_type`, `water_tank_capacity`, `water_pressure`
-- `meter_condition`, `manufacturer`, `relocation_needed`, `replacement_needed`
-- `meter_type`, `reading_method`
-- `image1_id`~`image4_id` (R2 파일 경로)
-- `lat`, `lng`, `created_at`
+- **서버 데이터 조회는 서버 컴포넌트 + Server Actions로 유지한다.** 클라이언트 페칭(TanStack Query 등)으로 되돌리지 않는다. 필터/정렬/페이지네이션은 URL 쿼리스트링 → 서버 재조회 방식을 유지.
+- **DTO(DB row)와 ViewModel을 분리**하고, 화면별 mapper 함수를 통해 변환한다 (`mapToTableRow`, `mapToMapMarker`, `mapToEditFormValues` 등). 컴포넌트에 DB row를 그대로 내려주지 않는다.
+- **외부에서 들어오는 데이터는 진입점에서 Zod로 검증**한다 (엑셀 업로드 파싱 결과, 지오코딩 API 응답). `z.infer`로 타입 추론해서 중복 정의하지 않는다.
+- 새 기능을 추가할 때도 `features/{도메인}/{api,components,types}` 구조를 따른다. 여러 도메인이 공유하는 것만 `shared/`로 옮긴다.
 
-처리 완료 판정: `meter_number`, `reading`, `sealed`, `location`, `usage_type`, `floor` 6개 전부 not null (또는 `note = '호폐'`)
+## 디자인 시스템
 
-## 엑셀 형식
-
-**기존 형식** (`xl/worksheets/sheet1.xml`, 데이터 4행~): 상수 `C` 참고  
-**대불 형식** (`수도미터목록` 시트 존재 시 감지, 데이터 5행~): 상수 `DB` 참고  
-→ template-fill/route.ts 상단 `C`, `DB` 상수에 컬럼 매핑 정의됨
-
-## 위치 선택 구조 (MeterEditModal)
-
-2단계: 옥내/옥외 → 건물앞/건물뒤/건물좌/건물우/입구좌/입구우/기타  
-저장값 형식: `옥내(건물앞)`, `옥외(입구좌)` 등
-
-## 환경변수 (Vercel에 세팅 필요)
+톤: 실용적/미니멀 (내부 관리툴). 무채색(zinc) 베이스 + 청록(teal/cyan) 포인트 컬러 하나만 사용, 장식적 요소 최소화.
 
 ```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-R2_ACCOUNT_ID
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
-R2_BUCKET_NAME
-NEXT_PUBLIC_R2_PUBLIC_URL
-NEXT_PUBLIC_NAVER_CLIENT_ID
-NAVER_CLIENT_ID
-NAVER_CLIENT_SECRET
+                라이트        다크
+background      #FAFAFA      #18181B
+surface         #FFFFFF      #27272A
+border          #E4E4E7      #3F3F46
+text-primary    #18181B      #FAFAFA
+text-secondary  #71717A      #A1A1AA
+accent          #0E7490      #22D3EE
+success          #16A34A      #22C55E
+warning          #D97706      #F59E0B
 ```
+
+- 타이포그래피: Pretendard. 숫자 컬럼(지침, 좌표, 도면번호)에는 `tabular-nums` 적용.
+- 다크모드: `next-themes` + Tailwind v4 `@theme` CSS 변수.
+- 사이드바: 펼침(라벨+아이콘) ↔ 접힘(아이콘만) 두 상태, localStorage에 상태 저장. 토글 버튼은 접힘 상태에서도 항상 클릭 가능한 위치 유지.
+- 지도 뷰(`MeterMapView`)는 Naver Maps 자체 스타일을 존중한다. 다크모드 시 지도 자체는 그대로 두고 주변 UI(패널, 마커 팝업)만 다크 토큰을 적용한다.
+
+## 민감정보 처리 원칙 (이름/주소)
+
+- DB에는 실명을 그대로 저장한다 (업로드 시 마스킹하지 않음).
+- 실명 노출 여부는 **서버(Server Action)에서 사용자 role(`profiles` 테이블: `admin` | `viewer`)을 확인한 뒤 결정**한다. `admin`은 실명, 그 외는 마스킹(`오**`)된 값을 반환.
+- 마스킹 로직은 `features/meter-survey/types/`의 mapper에 위치하며, **클라이언트로는 이미 마스킹 여부가 결정된 값만 내려간다.** 네트워크 응답에 실명 원본이 노출되지 않는지는 새 조회 로직을 추가할 때마다 확인한다.
+- 조회 로그, 컬럼 단위 RLS는 현재 범위 밖 (필요성 재검토 시 별도 논의).
+
+## 절대 건드리면 안 되는 부분
+
+- `template-fill/route.ts`의 JSZip 기반 XML 직접 조작 로직 (서식 보존 목적으로 xlsx 라이브러리 대신 직접 구현한 것 — xlsx 라이브러리로 되돌리지 말 것)
+- `proxy.ts`의 인증 리다이렉트 흐름과 각 API/Server Action의 개별 `getUser()` 재검증 (쿠키 조작 방어 목적)
+- 위치 데이터 형식 (`옥내(건물앞)` 등)과 파싱 정규식
+- booup-blog와 공유하는 Supabase 인스턴스/R2 버킷 — 스키마나 버킷 구조를 독단적으로 바꾸지 말 것
+
+## 관련 문서
+
+- `ARCHITECTURE.md`: 기술 선택 이유, DB 스키마 상세, 엑셀 처리 로직, 인증 구조
+- `README.md`: 로컬 실행/배포 방법
+
+관련 프로젝트: booup-blog (F:/booup-blog, booup.dev)에서 야장관리 기능을 분리. 동일한 Supabase 인스턴스와 R2 버킷을 공유하며, 코드베이스는 독립적으로 관리됨.

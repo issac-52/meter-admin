@@ -3,7 +3,17 @@
     "allow": [
       "Bash(node -e ' *)",
       "Bash(npx tsc *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(git mv *)",
+      "Bash(npm run *)",
+      "PowerShell(npm run *)",
+      "Bash(npm -v)",
+      "PowerShell(npm *)",
+      "PowerShell(npm install *)",
+      "Bash(curl -s -o /dev/null -w \"login page: %{http_code}\\\\n\" http://localhost:3000/admin/login)",
+      "Bash(curl -s -o /dev/null -w \"root redirect: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl *)",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }

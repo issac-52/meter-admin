@@ -78,15 +78,37 @@ npm run dev
 ## 프로젝트 구조
 
 ```
+proxy.ts                                # 인증 보호 — 미인증 시 /admin/login 리다이렉트
 app/
   admin/
-    login/          로그인
-    meter/          야장관리 (목록 + 수정)
-    meter-excel/    엑셀관리자 (차분/양식 채우기)
-    api/            서버 API 라우트
-components/admin/   UI 컴포넌트
-lib/                Supabase, R2 클라이언트
-middleware.ts       인증 보호
+    login/page.tsx
+    meter/page.tsx                      # 야장관리 메인 (서버 컴포넌트)
+    meter-excel/page.tsx                # 엑셀관리자
+    api/
+      template-fill/route.ts
+      upload-meter-image/route.ts
+      image-list/route.ts
+      image-proxy/route.ts
+      geocode/route.ts
+features/
+  meter-survey/                         # 야장관리 도메인
+    api/                                # _actions.ts (getMeterRecords 등 Server Actions)
+    components/                         # MeterTable, MeterEditModal, MeterMapView
+    types/                              # DTO/ViewModel + mapper (maskName 포함)
+  excel-manager/                        # 엑셀관리자 도메인
+    api/                                # template-fill 연동, 업로드 파싱 (형식별 파서)
+    components/                         # MeterExcelUpload, MeterExcelDiff, MeterTemplateFill
+    types/
+  auth/                                 # 인증 도메인
+    api/                                # loginAction, logoutAction, profiles role 조회
+components/admin/
+  AdminNav.tsx                          # 사이드바 (접이식) + 다크모드 토글
+shared/
+  ui/
+  lib/
+    supabase/{admin,server,client}.ts
+    r2-storage.ts
+  types/                                # meter_records 공통 DTO 스키마 (Zod)
 ```
 
 상세 구조와 설계 의도는 [`ARCHITECTURE.md`](./ARCHITECTURE.md)를 참고하세요.
