@@ -119,10 +119,11 @@ function parseGate(wb: XLSX.WorkBook): ParsedRow[] {
   const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: false });
   const dataRows = allRows.slice(3);
   return dataRows
-    .filter((row) => row[GATE_COL.VALVE_NO] != null)
+    .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '제수밸브' as ValveType,
-      valve_no: str(row[GATE_COL.VALVE_NO]),
+      // 실제 양식에는 "밸브번호" 칸이 빈 경우가 많아 연번(A열)을 대체 식별자로 사용
+      valve_no: str(row[GATE_COL.VALVE_NO]) ?? str(row[0]),
       block: str(row[GATE_COL.BLOCK]),
       old_address: str(row[GATE_COL.OLD_ADDRESS]),
       road_address: str(row[GATE_COL.ROAD_ADDRESS]),
@@ -154,10 +155,11 @@ function parseAir(wb: XLSX.WorkBook): ParsedRow[] {
   const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: false });
   const dataRows = allRows.slice(3);
   return dataRows
-    .filter((row) => row[AIR_COL.VALVE_NO] != null)
+    .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '공기밸브' as ValveType,
-      valve_no: str(row[AIR_COL.VALVE_NO]),
+      // 실제 양식에는 "밸브번호" 칸이 빈 경우가 많아 연번(A열)을 대체 식별자로 사용
+      valve_no: str(row[AIR_COL.VALVE_NO]) ?? str(row[0]),
       block: str(row[AIR_COL.BLOCK]),
       old_address: str(row[AIR_COL.OLD_ADDRESS]),
       road_address: str(row[AIR_COL.ROAD_ADDRESS]),
@@ -190,10 +192,11 @@ function parseHydrant(wb: XLSX.WorkBook): ParsedRow[] {
   const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: false });
   const dataRows = allRows.slice(5);
   return dataRows
-    .filter((row) => row[HYDRANT_COL.VALVE_NO] != null)
+    .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '소화전' as ValveType,
-      valve_no: str(row[HYDRANT_COL.VALVE_NO]),
+      // 실제 양식에는 "소화전번호" 칸이 빈 경우가 많아 순번(A열)을 대체 식별자로 사용
+      valve_no: str(row[HYDRANT_COL.VALVE_NO]) ?? str(row[0]),
       block: str(row[HYDRANT_COL.BLOCK]),
       road_address: str(row[HYDRANT_COL.ROAD_ADDRESS]),
       map_sheet_no: str(row[HYDRANT_COL.MAP_SHEET_NO]),

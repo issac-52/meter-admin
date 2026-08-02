@@ -113,6 +113,9 @@ export async function importValvesFromExcel(block: string, rows: Partial<ValveIn
   await requireAuth();
   const admin = createAdminClient();
 
+  // valve_records.block은 block_regions(block)을 FK로 참조 — 새 블록이면 먼저 등록 (미분류로)
+  await admin.from('block_regions').upsert({ block }, { onConflict: 'block', ignoreDuplicates: true });
+
   const { data: existing } = await admin.from('valve_records').select('id, valve_no').eq('block', block);
   const existingByValveNo = new Map(
     (existing ?? [])
