@@ -2,12 +2,13 @@
 
 import { useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Pencil, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map, Download, Camera } from 'lucide-react';
-import type { ValveSortCol, ValveSortDir } from '@/features/valve-survey/api/actions';
+import { Pencil, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map, Download, Camera, Trash2 } from 'lucide-react';
+import { type ValveSortCol, type ValveSortDir, getValveImageDeletionPreview, bulkDeleteValveImages } from '@/features/valve-survey/api/actions';
 import type { ValveRecord, ValveType } from '@/shared/types/valve-record';
 import { VALVE_TYPE_LABEL } from '@/features/valve-survey/types/mappers';
 import ValveFormModal from './ValveFormModal';
 import ValveMapView from './ValveMapView';
+import BulkImageDeleteModal from '@/shared/ui/BulkImageDeleteModal';
 
 type Props = {
   records: ValveRecord[];
@@ -62,6 +63,7 @@ export default function ValveTable({
   const [downloadBlock, setDownloadBlock] = useState('');
   const [isImageDownloading, setIsImageDownloading] = useState(false);
   const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   function handleRefresh() {
@@ -230,6 +232,14 @@ export default function ValveTable({
           >
             <Download size={14} />
             <span className="hidden sm:inline">이미지 다운로드</span>
+          </button>
+          <button
+            onClick={() => setShowBulkDeleteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface text-red-500 hover:bg-red-500/10 text-sm font-semibold rounded-lg transition-colors"
+            title="이미지 일괄삭제"
+          >
+            <Trash2 size={14} />
+            <span className="hidden sm:inline">이미지 일괄삭제</span>
           </button>
         </div>
       </div>
@@ -463,6 +473,16 @@ export default function ValveTable({
           blocks={blocks}
           onClose={() => setEditingRecord(null)}
           onSaved={() => { setEditingRecord(null); router.refresh(); }}
+        />
+      )}
+      {showBulkDeleteModal && (
+        <BulkImageDeleteModal
+          title="밸브 이미지 일괄삭제"
+          blocks={blocks}
+          onClose={() => setShowBulkDeleteModal(false)}
+          onDeleted={() => router.refresh()}
+          getPreview={getValveImageDeletionPreview}
+          deleteImages={bulkDeleteValveImages}
         />
       )}
     </div>

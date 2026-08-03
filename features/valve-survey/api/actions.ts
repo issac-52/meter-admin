@@ -4,6 +4,13 @@ import { createAdminClient } from '@/shared/lib/supabase/admin';
 import { createClient as createServerClient } from '@/shared/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { ValveRecord, ValveInsert, ValveType } from '@/shared/types/valve-record';
+import { deleteFromStorage } from '@/shared/lib/r2-storage';
+
+function nextDay(date: string) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 async function requireAuth() {
   const supabase = await createServerClient();
@@ -107,6 +114,65 @@ export async function getValveRecords(
     airValveCount: airValveCount ?? 0,
     error,
   };
+}
+
+async function queryValveImagesInRange(dateFrom: string, dateTo: string, block?: string) {
+  const admin = createAdminClient();
+  let query = admin
+    .from('valve_records')
+    .select('id, image1_id, image2_id')
+    .or('image1_id.not.is.null,image2_id.not.is.null')
+    .gte('survey_date', dateFrom)
+    .lt('survey_date', nextDay(dateTo));
+  if (block) query = query.eq('block', block);
+  const { data, error } = await query;
+  return {
+    data: (data ?? []) as { id: number; image1_id: string | null; image2_id: string | null }[],
+    error,
+  };
+}
+
+// 삭제 전 미리보기 — 몇 건의 레코드/이미지가 영향받는지 확인용 (실제 삭제는 수행하지 않음)
+export async function getValveImageDeletionPreview(
+  dateFrom: string,
+  dateTo: string,
+  block?: string,
+): Promise<{ recordCount: number; imageCount: number; error?: string }> {
+  await requireAuth();
+  const { data, error } = await queryValveImagesInRange(dateFrom, dateTo, block);
+  if (error) return { recordCount: 0, imageCount: 0, error: error.message };
+  const imageCount = data.reduce((sum, r) => sum + [r.image1_id, r.image2_id].filter(Boolean).length, 0);
+  return { recordCount: data.length, imageCount };
+}
+
+// 지정 기간(조사일자 기준) 이미지 일괄 삭제 — R2 스토리지에서 파일 삭제 + DB 컬럼 null 처리. 복구 불가.
+export async function bulkDeleteValveImages(
+  dateFrom: string,
+  dateTo: string,
+  block?: string,
+): Promise<{ deletedCount?: number; error?: string }> {
+  await requireAuth();
+  const admin = createAdminClient();
+  const { data, error } = await queryValveImagesInRange(dateFrom, dateTo, block);
+  if (error) return { error: error.message };
+
+  let deletedCount = 0;
+  for (const r of data) {
+    const paths = [r.image1_id, r.image2_id].filter((p): p is string => !!p);
+    await Promise.all(paths.map((p) => deleteFromStorage(p).catch(() => {})));
+    deletedCount += paths.length;
+  }
+
+  if (data.length > 0) {
+    const { error: updateError } = await admin
+      .from('valve_records')
+      .update({ image1_id: null, image2_id: null })
+      .in('id', data.map((r) => r.id));
+    if (updateError) return { error: updateError.message };
+  }
+
+  revalidatePath('/admin/valve');
+  return { deletedCount };
 }
 
 export async function importValvesFromExcel(block: string, rows: Partial<ValveInsert>[]) {

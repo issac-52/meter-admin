@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import type { MeterRecord, MeterInsert } from '@/shared/types/meter-record';
 import { getUserRole, type UserRole } from '@/shared/lib/auth/get-user-role';
 import { maskName } from '@/features/meter-survey/types/mappers';
+import { deleteFromStorage } from '@/shared/lib/r2-storage';
 
 async function requireAuth() {
   const supabase = await createServerClient();
@@ -306,6 +307,68 @@ export async function getBlockRowNos(block: string): Promise<string[]> {
     .eq('block', block)
     .not('row_no', 'is', null);
   return (data ?? []).map((r: { row_no: string }) => r.row_no);
+}
+
+async function queryMeterImagesInRange(dateFrom: string, dateTo: string, block?: string) {
+  const admin = createAdminClient();
+  let query = admin
+    .from('meter_records')
+    .select('id, image1_id, image2_id, image3_id, image4_id')
+    .or('image1_id.not.is.null,image2_id.not.is.null,image3_id.not.is.null,image4_id.not.is.null')
+    .gte('survey_date', dateFrom)
+    .lt('survey_date', nextDay(dateTo));
+  if (block) query = query.eq('block', block);
+  const { data, error } = await query;
+  return {
+    data: (data ?? []) as Pick<MeterRecord, 'id' | 'image1_id' | 'image2_id' | 'image3_id' | 'image4_id'>[],
+    error,
+  };
+}
+
+// 삭제 전 미리보기 — 몇 건의 레코드/이미지가 영향받는지 확인용 (실제 삭제는 수행하지 않음)
+export async function getMeterImageDeletionPreview(
+  dateFrom: string,
+  dateTo: string,
+  block?: string,
+): Promise<{ recordCount: number; imageCount: number; error?: string }> {
+  await requireAuth();
+  const { data, error } = await queryMeterImagesInRange(dateFrom, dateTo, block);
+  if (error) return { recordCount: 0, imageCount: 0, error: error.message };
+  const imageCount = data.reduce(
+    (sum, r) => sum + [r.image1_id, r.image2_id, r.image3_id, r.image4_id].filter(Boolean).length,
+    0,
+  );
+  return { recordCount: data.length, imageCount };
+}
+
+// 지정 기간(조사일자 기준) 이미지 일괄 삭제 — R2 스토리지에서 파일 삭제 + DB 컬럼 null 처리. 복구 불가.
+export async function bulkDeleteMeterImages(
+  dateFrom: string,
+  dateTo: string,
+  block?: string,
+): Promise<{ deletedCount?: number; error?: string }> {
+  await requireAuth();
+  const admin = createAdminClient();
+  const { data, error } = await queryMeterImagesInRange(dateFrom, dateTo, block);
+  if (error) return { error: error.message };
+
+  let deletedCount = 0;
+  for (const r of data) {
+    const paths = [r.image1_id, r.image2_id, r.image3_id, r.image4_id].filter((p): p is string => !!p);
+    await Promise.all(paths.map((p) => deleteFromStorage(p).catch(() => {})));
+    deletedCount += paths.length;
+  }
+
+  if (data.length > 0) {
+    const { error: updateError } = await admin
+      .from('meter_records')
+      .update({ image1_id: null, image2_id: null, image3_id: null, image4_id: null })
+      .in('id', data.map((r) => r.id));
+    if (updateError) return { error: updateError.message };
+  }
+
+  revalidatePath('/admin/meter');
+  return { deletedCount };
 }
 
 export async function getUngeocodedRecords(block?: string): Promise<Pick<MeterRecord, 'id' | 'address'>[]> {

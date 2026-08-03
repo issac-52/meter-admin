@@ -2,12 +2,13 @@
 
 import { useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Pencil, Download, ChevronLeft, ChevronRight, Search, X, Camera, ChevronUp, ChevronDown, ChevronsUpDown, Copy, Check, RefreshCw, MapPin, List, Map, Calendar } from 'lucide-react';
-import { type SortCol, type SortDir, type StatusFilter } from '@/features/meter-survey/api/actions';
+import { Pencil, Download, ChevronLeft, ChevronRight, Search, X, Camera, ChevronUp, ChevronDown, ChevronsUpDown, Copy, Check, RefreshCw, MapPin, List, Map, Calendar, Trash2 } from 'lucide-react';
+import { type SortCol, type SortDir, type StatusFilter, getMeterImageDeletionPreview, bulkDeleteMeterImages } from '@/features/meter-survey/api/actions';
 import { type RegionWithBlocks } from '@/features/meter-survey/api/regions-actions';
 import { UNASSIGNED_REGION_ID, type MeterTableRow } from '@/features/meter-survey/types/mappers';
 import MeterEditModal from './MeterEditModal';
 import MeterMapView from './MeterMapView';
+import BulkImageDeleteModal from '@/shared/ui/BulkImageDeleteModal';
 
 type Props = {
   records: MeterTableRow[];
@@ -69,6 +70,7 @@ export default function MeterTable({
   const [downloadBlock, setDownloadBlock] = useState('');
   const [isImageDownloading, setIsImageDownloading] = useState(false);
   const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState(dateFrom);
   const [filterDateTo, setFilterDateTo] = useState(dateTo);
   const [searchInput, setSearchInput] = useState(search);
@@ -329,6 +331,14 @@ export default function MeterTable({
           >
             <Download size={14} />
             이미지 다운로드
+          </button>
+          <button
+            onClick={() => setShowBulkDeleteModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface text-red-500 hover:bg-red-500/10 text-sm font-semibold rounded-lg transition-colors"
+            title="이미지 일괄삭제"
+          >
+            <Trash2 size={14} />
+            <span className="hidden sm:inline">이미지 일괄삭제</span>
           </button>
         </div>
       </div>
@@ -747,6 +757,16 @@ export default function MeterTable({
       )}
       {editingRecord && (
         <MeterEditModal record={editingRecord} onClose={() => setEditingRecord(null)} />
+      )}
+      {showBulkDeleteModal && (
+        <BulkImageDeleteModal
+          title="야장 이미지 일괄삭제"
+          blocks={blocks}
+          onClose={() => setShowBulkDeleteModal(false)}
+          onDeleted={() => router.refresh()}
+          getPreview={getMeterImageDeletionPreview}
+          deleteImages={bulkDeleteMeterImages}
+        />
       )}
     </div>
   );
