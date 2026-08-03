@@ -122,8 +122,8 @@ function parseGate(wb: XLSX.WorkBook): ParsedRow[] {
     .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '제수밸브' as ValveType,
-      // 실제 양식에는 "밸브번호" 칸이 빈 경우가 많아 연번(A열)을 대체 식별자로 사용
-      valve_no: str(row[GATE_COL.VALVE_NO]) ?? str(row[0]),
+      // 연번(A열)을 번호로 우선 사용 — "밸브번호" 칸은 비어있는 경우가 많아 보조 식별자로만 사용
+      valve_no: str(row[0]) ?? str(row[GATE_COL.VALVE_NO]),
       block: str(row[GATE_COL.BLOCK]),
       old_address: str(row[GATE_COL.OLD_ADDRESS]),
       road_address: str(row[GATE_COL.ROAD_ADDRESS]),
@@ -158,8 +158,8 @@ function parseAir(wb: XLSX.WorkBook): ParsedRow[] {
     .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '공기밸브' as ValveType,
-      // 실제 양식에는 "밸브번호" 칸이 빈 경우가 많아 연번(A열)을 대체 식별자로 사용
-      valve_no: str(row[AIR_COL.VALVE_NO]) ?? str(row[0]),
+      // 연번(A열)을 번호로 우선 사용 — "밸브번호" 칸은 비어있는 경우가 많아 보조 식별자로만 사용
+      valve_no: str(row[0]) ?? str(row[AIR_COL.VALVE_NO]),
       block: str(row[AIR_COL.BLOCK]),
       old_address: str(row[AIR_COL.OLD_ADDRESS]),
       road_address: str(row[AIR_COL.ROAD_ADDRESS]),
@@ -195,8 +195,8 @@ function parseHydrant(wb: XLSX.WorkBook): ParsedRow[] {
     .filter((row) => row[0] != null)
     .map((row): ParsedRow => ({
       valve_type: '소화전' as ValveType,
-      // 실제 양식에는 "소화전번호" 칸이 빈 경우가 많아 순번(A열)을 대체 식별자로 사용
-      valve_no: str(row[HYDRANT_COL.VALVE_NO]) ?? str(row[0]),
+      // 순번(A열)을 번호로 우선 사용 — "소화전번호" 칸은 비어있는 경우가 많아 보조 식별자로만 사용
+      valve_no: str(row[0]) ?? str(row[HYDRANT_COL.VALVE_NO]),
       block: str(row[HYDRANT_COL.BLOCK]),
       road_address: str(row[HYDRANT_COL.ROAD_ADDRESS]),
       map_sheet_no: str(row[HYDRANT_COL.MAP_SHEET_NO]),
