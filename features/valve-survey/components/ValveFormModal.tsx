@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { X, Check } from 'lucide-react';
+import { useState, useTransition, useRef } from 'react';
+import { X, Check, Trash2, ImagePlus, ExternalLink } from 'lucide-react';
 import { createValveRecord, updateValveRecord } from '@/features/valve-survey/api/actions';
 import type { ValveRecord, ValveInsert, ValveType } from '@/shared/types/valve-record';
 import {
@@ -39,6 +39,176 @@ const optionBtnCls = (active: boolean) =>
       : 'bg-background border-border text-text-secondary hover:text-text-primary'
   }`;
 
+const STORAGE_BASE = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+const thumbnailUrl = (path: string) => `${STORAGE_BASE}/${path}`;
+
+type ImageSlot = 1 | 2;
+
+function ValveImageSlotCard({
+  slot,
+  fileId,
+  block,
+  valveNo,
+  recordId,
+  onUploaded,
+  onDeleted,
+}: {
+  slot: ImageSlot;
+  fileId: string | null;
+  block: string | null;
+  valveNo: string | null;
+  recordId: number;
+  onUploaded: (slot: ImageSlot, newFileId: string) => void;
+  onDeleted: (slot: ImageSlot) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cacheBust, setCacheBust] = useState(() => Date.now());
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!block || !valveNo) {
+      setError('밸브관리번호가 없어 이미지를 업로드할 수 없습니다.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        record_id: String(recordId),
+        slot: String(slot),
+        block,
+        valve_no: valveNo,
+        content_type: file.type || 'image/jpeg',
+      });
+      const presignRes = await fetch(`/admin/api/upload-valve-image?${params}`);
+      if (!presignRes.ok) {
+        const j = await presignRes.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error ?? '업로드 준비 실패');
+      }
+      const { presignedUrl, filePath } = await presignRes.json() as {
+        presignedUrl: string;
+        filePath: string;
+      };
+
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type || 'image/jpeg' },
+      });
+      if (!uploadRes.ok) throw new Error('스토리지 업로드 실패');
+
+      const saveRes = await fetch('/admin/api/upload-valve-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ record_id: recordId, slot, file_path: filePath }),
+      });
+      if (!saveRes.ok) {
+        const j = await saveRes.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error ?? '저장 실패');
+      }
+
+      setCacheBust(Date.now());
+      onUploaded(slot, filePath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function handleDelete() {
+    if (!fileId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/admin/api/upload-valve-image', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ record_id: recordId, slot, file_path: fileId }),
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? '삭제 실패');
+      }
+      onDeleted(slot);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-text-secondary">
+        이미지 {slot}{' '}
+        {valveNo && (
+          <span className="text-text-secondary/70 font-mono">({valveNo}-{slot})</span>
+        )}
+      </span>
+
+      {fileId ? (
+        <div className="relative rounded-lg overflow-hidden border border-border bg-background">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${thumbnailUrl(fileId)}?t=${cacheBust}`}
+            alt={`이미지 ${slot}`}
+            className="w-full h-28 object-cover"
+          />
+          <div className="absolute top-1.5 right-1.5 flex gap-1">
+            <a
+              href={thumbnailUrl(fileId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-md transition-colors"
+            >
+              <ExternalLink size={12} />
+            </a>
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              className="p-1.5 bg-black/60 hover:bg-red-500/80 text-white rounded-md transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+          {loading && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <span className="text-xs text-white">처리 중...</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <label
+          className={`flex flex-col items-center justify-center gap-1.5 h-28 rounded-lg border border-dashed border-border bg-background/50 cursor-pointer hover:border-accent/50 hover:bg-background transition-colors ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          {loading ? (
+            <span className="text-xs text-text-secondary">업로드 중...</span>
+          ) : (
+            <>
+              <ImagePlus size={18} className="text-text-secondary" />
+              <span className="text-xs text-text-secondary">이미지 추가</span>
+            </>
+          )}
+        </label>
+      )}
+
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 export default function ValveFormModal(props: Props) {
   const { blocks, onClose, onSaved } = props;
 
@@ -50,8 +220,11 @@ export default function ValveFormModal(props: Props) {
 
   const [valveType, setValveType] = useState<ValveType>(initial.values.valve_type ?? '제수밸브');
   const [block, setBlock] = useState(initial.values.block ?? '');
+  const [valveNo, setValveNo] = useState((initial.values.valve_no as string) ?? '');
   const [oldAddress, setOldAddress] = useState(initial.values.old_address ?? '');
   const [roadAddress, setRoadAddress] = useState(initial.values.road_address ?? '');
+  const [image1Id, setImage1Id] = useState<string | null>(props.mode === 'edit' ? props.record.image1_id : null);
+  const [image2Id, setImage2Id] = useState<string | null>(props.mode === 'edit' ? props.record.image2_id : null);
   const [hydrantTypeSelect, setHydrantTypeSelect] = useState(initial.hydrantTypeSelect);
   const [hydrantTypeCustom, setHydrantTypeCustom] = useState(initial.hydrantTypeCustom);
   const [valveFormSelect, setValveFormSelect] = useState(initial.valveFormSelect);
@@ -79,6 +252,7 @@ export default function ValveFormModal(props: Props) {
 
     const payload: Partial<ValveInsert> & Pick<ValveInsert, 'block' | 'valve_type'> = {
       block,
+      valve_no: valveNo.trim() || null,
       old_address: oldAddress || null,
       road_address: roadAddress || null,
       lat: values.lat ?? null,
@@ -108,6 +282,16 @@ export default function ValveFormModal(props: Props) {
       }
       onSaved();
     });
+  }
+
+  function handleImageUploaded(slot: ImageSlot, newFileId: string) {
+    if (slot === 1) setImage1Id(newFileId);
+    else setImage2Id(newFileId);
+  }
+
+  function handleImageDeleted(slot: ImageSlot) {
+    if (slot === 1) setImage1Id(null);
+    else setImage2Id(null);
   }
 
   return (
@@ -166,6 +350,45 @@ export default function ValveFormModal(props: Props) {
               ))}
             </select>
           </div>
+
+          {/* 밸브관리번호 */}
+          <div>
+            <label className={labelCls}>밸브관리번호</label>
+            <input
+              type="text"
+              value={valveNo}
+              onChange={(e) => setValveNo(e.target.value)}
+              placeholder="예: 1, GV-001"
+              className={`${inputCls} font-mono tabular-nums`}
+            />
+          </div>
+
+          {/* 이미지 (개당 2장, 저장 후 즉시 업로드) */}
+          {props.mode === 'edit' && (
+            <div>
+              <label className={labelCls}>
+                이미지
+                <span className="ml-1.5 font-normal text-text-secondary/70">(최대 2장, 즉시 저장)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {([1, 2] as ImageSlot[]).map((slot) => (
+                  <ValveImageSlotCard
+                    key={slot}
+                    slot={slot}
+                    fileId={slot === 1 ? image1Id : image2Id}
+                    block={props.record.block}
+                    valveNo={props.record.valve_no}
+                    recordId={props.record.id}
+                    onUploaded={handleImageUploaded}
+                    onDeleted={handleImageDeleted}
+                  />
+                ))}
+              </div>
+              {!props.record.valve_no && (
+                <p className="text-xs text-warning mt-1.5">밸브관리번호를 입력 후 저장하면 이미지를 업로드할 수 있습니다.</p>
+              )}
+            </div>
+          )}
 
           {/* 종류 */}
           <div>

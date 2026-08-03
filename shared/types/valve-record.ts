@@ -27,6 +27,10 @@ export type ValveRecord = {
   valve_room_spec: string | null;
   valve_room_depth: string | null;
 
+  // 현장 사진 (개당 2장, 블록별 폴더에 저장 — 수용가와 별개)
+  image1_id: string | null;
+  image2_id: string | null;
+
   // 엑셀 업로드 전용 (수동 입력폼에는 노출되지 않음)
   valve_no: string | null;
   map_sheet_no: string | null;

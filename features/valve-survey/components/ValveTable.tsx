@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Pencil, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map } from 'lucide-react';
+import { Pencil, ChevronLeft, ChevronRight, Search, X, ChevronUp, ChevronDown, ChevronsUpDown, RefreshCw, List, Map, Download, Camera } from 'lucide-react';
 import type { ValveSortCol, ValveSortDir } from '@/features/valve-survey/api/actions';
 import type { ValveRecord, ValveType } from '@/shared/types/valve-record';
 import { VALVE_TYPE_LABEL } from '@/features/valve-survey/types/mappers';
@@ -58,12 +58,79 @@ export default function ValveTable({
   const [searchInput, setSearchInput] = useState(search);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('map');
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadBlock, setDownloadBlock] = useState('');
+  const [isImageDownloading, setIsImageDownloading] = useState(false);
+  const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   function handleRefresh() {
     setIsRefreshing(true);
     router.refresh();
     setTimeout(() => setIsRefreshing(false), 800);
+  }
+
+  async function handleImageDownload(block?: string) {
+    if (!('showSaveFilePicker' in window)) {
+      alert('이 기능은 Chrome 또는 Edge 브라우저에서만 사용 가능합니다.');
+      return;
+    }
+    setIsImageDownloading(true);
+    try {
+      const params = new URLSearchParams();
+      if (block) params.set('block', block);
+      const listRes = await fetch(`/admin/api/valve-image-list?${params}`);
+      if (!listRes.ok) { alert(await listRes.text()); return; }
+      const images: { path: string; filename: string; url: string | null }[] = await listRes.json();
+      if (images.length === 0) { alert('해당 조건에 이미지가 없습니다.'); return; }
+
+      const label = block ? `블록${block}` : new Date().toISOString().slice(0, 10);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fileHandle = await (window as any).showSaveFilePicker({
+        suggestedName: `밸브이미지_${label}.zip`,
+        types: [{ description: 'ZIP 파일', accept: { 'application/zip': ['.zip'] } }],
+      });
+      const writable = await fileHandle.createWritable();
+
+      const { Zip, ZipDeflate } = await import('fflate');
+
+      let zipCtrl: ReadableStreamDefaultController<Uint8Array>;
+      const zipStream = new ReadableStream<Uint8Array>({ start(c) { zipCtrl = c; } });
+      const pipePromise = zipStream.pipeTo(writable);
+
+      const zip = new Zip((err, data, final) => {
+        if (err) { zipCtrl.error(err); return; }
+        zipCtrl.enqueue(data);
+        if (final) zipCtrl.close();
+      });
+
+      setImageProgress({ current: 0, total: images.length });
+      for (let i = 0; i < images.length; i++) {
+        const { path, filename, url } = images[i];
+        const fetchUrl = url ?? `/admin/api/image-proxy?path=${encodeURIComponent(path)}`;
+        const res = await fetch(fetchUrl);
+        if (res.ok && res.body) {
+          const zipFile = new ZipDeflate(filename, { level: 0 });
+          zip.add(zipFile);
+          const reader = res.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) { zipFile.push(new Uint8Array(0), true); break; }
+            zipFile.push(value, false);
+          }
+        }
+        setImageProgress({ current: i + 1, total: images.length });
+      }
+
+      zip.end();
+      await pipePromise;
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') alert('이미지 다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setIsImageDownloading(false);
+      setImageProgress(null);
+    }
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -156,6 +223,13 @@ export default function ValveTable({
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">새로고침</span>
+          </button>
+          <button
+            onClick={() => setShowDownloadModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-border text-text-primary font-semibold text-sm rounded-lg hover:opacity-80 transition-opacity"
+          >
+            <Download size={14} />
+            <span className="hidden sm:inline">이미지 다운로드</span>
           </button>
         </div>
       </div>
@@ -330,6 +404,58 @@ export default function ValveTable({
         </>
       )}
 
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowDownloadModal(false)}>
+          <div className="bg-surface border border-border rounded-xl p-6 w-80 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-text-primary font-semibold text-sm">이미지 다운로드</h3>
+              <button onClick={() => setShowDownloadModal(false)} className="text-text-secondary hover:text-text-primary transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 mb-4">
+              <div>
+                <p className="text-xs text-text-secondary mb-2">블록 (비우면 전체)</p>
+                <select
+                  value={downloadBlock}
+                  onChange={(e) => setDownloadBlock(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-accent transition-colors"
+                >
+                  <option value="">전체 블록</option>
+                  {blocks.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => { setShowDownloadModal(false); await handleImageDownload(downloadBlock || undefined); }}
+                disabled={isImageDownloading}
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-border hover:opacity-80 text-text-primary font-semibold text-sm rounded-lg disabled:opacity-50 transition-opacity"
+              >
+                {isImageDownloading ? <RefreshCw size={14} className="animate-spin" /> : <Camera size={14} />}
+                이미지 ZIP 다운로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {imageProgress && (
+        <div className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded-xl px-4 py-3 shadow-2xl w-64">
+          <div className="flex items-center gap-2 mb-2">
+            <RefreshCw size={13} className="animate-spin text-accent shrink-0" />
+            <p className="text-sm text-text-primary font-semibold">이미지 ZIP 생성 중</p>
+          </div>
+          <p className="text-xs text-text-secondary mb-2 tabular-nums">{imageProgress.current} / {imageProgress.total}개 완료</p>
+          <div className="h-1.5 bg-border rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent rounded-full transition-all duration-200"
+              style={{ width: `${(imageProgress.current / imageProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
       {editingRecord && (
         <ValveFormModal
           mode="edit"
