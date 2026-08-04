@@ -10,6 +10,7 @@ export const VALVE_TYPE_LABEL: Record<ValveType, string> = {
 
 export const HYDRANT_TYPE_OPTIONS = ['지하식', '지상쌍구', '기타'];
 export const VALVE_FORM_OPTIONS = ['GV', '핸들밸브', '확인불가', '기타'];
+export const AIR_VALVE_FORM_OPTIONS = ['단구', '쌍구', '기능성밸브', '기타'];
 export const VALVE_MATERIAL_OPTIONS = ['주철', 'STS', '확인불가', '기타'];
 export const DRIVE_METHOD_OPTIONS = ['수동', '자동'];
 export const OPEN_CLOSE_OPTIONS = ['OPEN', 'CLOSE'];
@@ -27,6 +28,10 @@ export function resolveSelectWithCustom(select: string, custom: string): string 
   if (!select) return null;
   if (select === '기타') return custom || null;
   return select;
+}
+
+export function getValveFormOptions(valveType: ValveType): string[] {
+  return valveType === '공기밸브' ? AIR_VALVE_FORM_OPTIONS : VALVE_FORM_OPTIONS;
 }
 
 // ─── 보호통규격 / 철개규격 ("Φ" 접두 조합) ────────────────────────────────────
@@ -100,6 +105,7 @@ export function mapToEditFormValues(r: ValveRecord): ValveEditFormValues {
       valve_no: r.valve_no,
       hydrant_diameter: r.hydrant_diameter,
       hydrant_valve_diameter: r.hydrant_valve_diameter,
+      valve_diameter: r.valve_diameter,
       note: r.note,
       open_close: r.open_close,
       drive_method: r.drive_method,
@@ -137,6 +143,7 @@ export function mapToCreateFormValues(
       valve_no: null,
       hydrant_diameter: null,
       hydrant_valve_diameter: null,
+      valve_diameter: null,
       note: null,
       open_close: null,
       drive_method: null,

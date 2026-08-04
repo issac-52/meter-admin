@@ -8,10 +8,10 @@ import {
   VALVE_TYPE_OPTIONS,
   VALVE_TYPE_LABEL,
   HYDRANT_TYPE_OPTIONS,
-  VALVE_FORM_OPTIONS,
   VALVE_MATERIAL_OPTIONS,
   DRIVE_METHOD_OPTIONS,
   OPEN_CLOSE_OPTIONS,
+  getValveFormOptions,
   resolveSelectWithCustom,
   buildProtectionPipeSpec,
   buildCoverSpec,
@@ -243,6 +243,9 @@ export default function ValveFormModal(props: Props) {
   }
 
   const isHydrant = valveType === '소화전';
+  const isSluiceValve = valveType === '제수밸브';
+  const isUndergroundHydrant = isHydrant && hydrantTypeSelect === '지하식';
+  const valveFormOptions = getValveFormOptions(valveType);
 
   function handleSave() {
     if (!block) {
@@ -267,10 +270,11 @@ export default function ValveFormModal(props: Props) {
       valve_material: !isHydrant ? resolveSelectWithCustom(valveMaterialSelect, valveMaterialCustom) : null,
       drive_method: !isHydrant ? (values.drive_method || null) : null,
       protection_pipe_spec: !isHydrant ? buildProtectionPipeSpec(protectionPipeUnknown, protectionPipeNumber) : null,
-      cover_spec: !isHydrant ? buildCoverSpec(coverSpecNumber) : null,
+      cover_spec: !isHydrant || isUndergroundHydrant ? buildCoverSpec(coverSpecNumber) : null,
       issue: !isHydrant ? (values.issue || null) : null,
-      valve_room_spec: !isHydrant ? (values.valve_room_spec || null) : null,
+      valve_room_spec: !isHydrant || isUndergroundHydrant ? (values.valve_room_spec || null) : null,
       valve_room_depth: !isHydrant ? (values.valve_room_depth || null) : null,
+      valve_diameter: isSluiceValve ? (values.valve_diameter || null) : null,
     };
 
     startTransition(async () => {
@@ -398,7 +402,13 @@ export default function ValveFormModal(props: Props) {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setValveType(t)}
+                  onClick={() => {
+                    setValveType(t);
+                    if (!getValveFormOptions(t).includes(valveFormSelect)) {
+                      setValveFormSelect('');
+                      setValveFormCustom('');
+                    }
+                  }}
                   className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
                     valveType === t
                       ? 'bg-accent border-accent text-white dark:text-zinc-950'
@@ -476,6 +486,38 @@ export default function ValveFormModal(props: Props) {
                 )}
               </div>
 
+              {isUndergroundHydrant && (
+                <>
+                  {/* 철개규격 */}
+                  <div>
+                    <label className={labelCls}>철개규격</label>
+                    <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-3 focus-within:border-accent transition-colors">
+                      <span className="text-text-secondary text-sm">Φ</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="숫자 입력"
+                        value={coverSpecNumber}
+                        onChange={(e) => setCoverSpecNumber(e.target.value)}
+                        className="w-full bg-transparent py-2 text-base md:text-sm text-text-primary tabular-nums focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 밸브실규격 */}
+                  <div>
+                    <label className={labelCls}>밸브실규격</label>
+                    <input
+                      type="text"
+                      placeholder="직접 입력"
+                      value={(values.valve_room_spec as string) ?? ''}
+                      onChange={(e) => set('valve_room_spec', e.target.value || null)}
+                      className={inputCls}
+                    />
+                  </div>
+                </>
+              )}
+
               {/* 밸브구경 */}
               <div>
                 <label className={labelCls}>밸브구경</label>
@@ -503,11 +545,26 @@ export default function ValveFormModal(props: Props) {
             </>
           ) : (
             <>
+              {isSluiceValve && (
+                /* 관경 */
+                <div>
+                  <label className={labelCls}>관경</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="숫자 입력"
+                    value={(values.valve_diameter as string) ?? ''}
+                    onChange={(e) => set('valve_diameter', e.target.value || null)}
+                    className={`${inputCls} tabular-nums`}
+                  />
+                </div>
+              )}
+
               {/* 형식 */}
               <div>
                 <label className={labelCls}>형식</label>
                 <div className="flex flex-wrap gap-2">
-                  {VALVE_FORM_OPTIONS.map((o) => (
+                  {valveFormOptions.map((o) => (
                     <button
                       key={o}
                       type="button"
