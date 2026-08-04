@@ -244,6 +244,7 @@ export default function ValveFormModal(props: Props) {
 
   const isHydrant = valveType === '소화전';
   const isSluiceValve = valveType === '제수밸브';
+  const isAirValve = valveType === '공기밸브';
   const isUndergroundHydrant = isHydrant && hydrantTypeSelect === '지하식';
   const valveFormOptions = getValveFormOptions(valveType);
 
@@ -267,7 +268,7 @@ export default function ValveFormModal(props: Props) {
       note: isHydrant ? (values.note || null) : null,
       open_close: values.open_close || null,
       valve_form: !isHydrant ? resolveSelectWithCustom(valveFormSelect, valveFormCustom) : null,
-      valve_material: !isHydrant ? resolveSelectWithCustom(valveMaterialSelect, valveMaterialCustom) : null,
+      valve_material: !isHydrant && !isAirValve ? resolveSelectWithCustom(valveMaterialSelect, valveMaterialCustom) : null,
       drive_method: !isHydrant ? (values.drive_method || null) : null,
       protection_pipe_spec: !isHydrant ? buildProtectionPipeSpec(protectionPipeUnknown, protectionPipeNumber) : null,
       cover_spec: !isHydrant || isUndergroundHydrant ? buildCoverSpec(coverSpecNumber) : null,
@@ -590,35 +591,37 @@ export default function ValveFormModal(props: Props) {
                 )}
               </div>
 
-              {/* 밸브재질 */}
-              <div>
-                <label className={labelCls}>밸브재질</label>
-                <div className="flex flex-wrap gap-2">
-                  {VALVE_MATERIAL_OPTIONS.map((o) => (
-                    <button
-                      key={o}
-                      type="button"
-                      onClick={() => {
-                        setValveMaterialSelect(o);
-                        if (o !== '기타') setValveMaterialCustom('');
-                      }}
-                      className={optionBtnCls(valveMaterialSelect === o)}
-                    >
-                      {o}
-                    </button>
-                  ))}
+              {/* 밸브재질 (공기밸브는 미해당) */}
+              {!isAirValve && (
+                <div>
+                  <label className={labelCls}>밸브재질</label>
+                  <div className="flex flex-wrap gap-2">
+                    {VALVE_MATERIAL_OPTIONS.map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        onClick={() => {
+                          setValveMaterialSelect(o);
+                          if (o !== '기타') setValveMaterialCustom('');
+                        }}
+                        className={optionBtnCls(valveMaterialSelect === o)}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                  {valveMaterialSelect === '기타' && (
+                    <input
+                      type="text"
+                      placeholder="직접 입력"
+                      value={valveMaterialCustom}
+                      onChange={(e) => setValveMaterialCustom(e.target.value)}
+                      className={`${inputCls} mt-2`}
+                      autoFocus
+                    />
+                  )}
                 </div>
-                {valveMaterialSelect === '기타' && (
-                  <input
-                    type="text"
-                    placeholder="직접 입력"
-                    value={valveMaterialCustom}
-                    onChange={(e) => setValveMaterialCustom(e.target.value)}
-                    className={`${inputCls} mt-2`}
-                    autoFocus
-                  />
-                )}
-              </div>
+              )}
 
               {/* 구동방법 */}
               <div>
