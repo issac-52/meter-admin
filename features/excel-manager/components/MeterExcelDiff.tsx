@@ -141,7 +141,7 @@ export default function MeterExcelDiff() {
           r.sealed ?? '', r.location ?? '', r.usage_type ?? '', r.floor ?? '',
           r.note ?? '', r.survey_date?.slice(0, 10) ?? '', r.cover_type ?? '',
           r.water_supply_type ?? '', r.meter_condition ?? '',
-          r.note === '호폐' ? '호폐' : '처리됨',
+          r.note === '호폐' ? '호폐' : r.note === '적재' ? '적재' : '처리됨',
         ]),
       ];
       const ws = XLSX.utils.aoa_to_sheet(sheetData);

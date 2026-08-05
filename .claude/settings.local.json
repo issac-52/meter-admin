@@ -13,7 +13,8 @@
       "Bash(curl -s -o /dev/null -w \"login page: %{http_code}\\\\n\" http://localhost:3000/admin/login)",
       "Bash(curl -s -o /dev/null -w \"root redirect: %{http_code}\\\\n\" http://localhost:3000/)",
       "Bash(curl *)",
-      "PowerShell(Get-NetTCPConnection *)"
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(npx eslint *)"
     ]
   }
 }

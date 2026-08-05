@@ -37,11 +37,11 @@ export type MeterInsert = Omit<MeterRecord, 'id' | 'created_at'>;
 
 export type MeterStatus = 'processed' | 'unprocessed' | 'closed';
 
-// 처리 완료 판정: 6개 필드 전부 not null (또는 note가 '호폐'/'위치불명'인 종결 처리)
+// 처리 완료 판정: 6개 필드 전부 not null (또는 note가 '호폐'/'위치불명'/'적재'인 종결 처리)
 export function getMeterStatus(
   r: Pick<MeterRecord, 'note' | 'meter_number' | 'reading' | 'sealed' | 'location' | 'usage_type' | 'floor'>,
 ): MeterStatus {
-  if (r.note === '호폐' || r.note === '위치불명') return 'closed';
+  if (r.note === '호폐' || r.note === '위치불명' || r.note === '적재') return 'closed';
   if (r.meter_number && r.reading && r.sealed && r.location && r.usage_type && r.floor) return 'processed';
   return 'unprocessed';
 }

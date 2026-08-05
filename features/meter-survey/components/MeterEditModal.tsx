@@ -4,15 +4,15 @@ import { useState, useTransition, useRef } from 'react';
 import { X, Check, Camera, Trash2, ImagePlus, ExternalLink, ChevronDown } from 'lucide-react';
 import { updateMeterRecord } from '@/features/meter-survey/api/actions';
 import type { MeterRecord, MeterInsert } from '@/shared/types/meter-record';
-import { mapToEditFormValues, USAGE_TYPES, LOCATION_DETAIL_OPTIONS } from '@/features/meter-survey/types/mappers';
+import { mapToEditFormValues, USAGE_TYPES, LOCATION_DETAIL_OPTIONS, MANUFACTURERS } from '@/features/meter-survey/types/mappers';
 
 const STORAGE_BASE = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
 const thumbnailUrl = (path: string) => `${STORAGE_BASE}/${path}`;
 const viewUrl = (path: string) => `${STORAGE_BASE}/${path}`;
 
-const COVER_OPTIONS = ['', '뚜껑 파손', '뚜껑 없음', '없음'];
+const COVER_OPTIONS = ['', '뚜껑 파손', '뚜껑 없음', '보호통 파손', '없음'];
 const WATER_SUPPLY_OPTIONS = ['직접', '간접', '물탱크', '저수조'];
-const METER_CONDITION_OPTIONS = ['', '초파', '녹폐', '정상'];
+const METER_CONDITION_OPTIONS = ['', '초파', '녹폐', '정상', '표시부불량'];
 
 type Props = {
   record: MeterRecord;
@@ -211,6 +211,8 @@ export default function MeterEditModal({ record, onClose }: Props) {
   const [locationInOut, setLocationInOut] = useState(initial.locationInOut);
   const [locationDetail, setLocationDetail] = useState(initial.locationDetail);
   const [locationCustom, setLocationCustom] = useState(initial.locationCustom);
+  const [manufacturerSelect, setManufacturerSelect] = useState(initial.manufacturerSelect);
+  const [manufacturerCustom, setManufacturerCustom] = useState(initial.manufacturerCustom);
   const [values, setValues] = useState<Partial<MeterInsert>>(initial.values);
   const [image1Id, setImage1Id] = useState<string | null>(record.image1_id);
   const [image2Id, setImage2Id] = useState<string | null>(record.image2_id);
@@ -243,6 +245,8 @@ export default function MeterEditModal({ record, onClose }: Props) {
       } else if (locationInOut && locationDetail === '기타' && locationCustom) {
         resolvedLocation = `${locationInOut}(${locationCustom})`;
       }
+      const resolvedManufacturer =
+        manufacturerSelect === '기타' ? (manufacturerCustom || null) : (manufacturerSelect || null);
       const payload: Partial<MeterInsert> = {
         ...values,
         meter_number: meterSame ? record.old_meter_number : (values.meter_number || null),
@@ -255,7 +259,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
         cover_type: values.cover_type || null,
         water_supply_type: values.water_supply_type || null,
         meter_condition: values.meter_condition || null,
-        manufacturer: values.manufacturer || null,
+        manufacturer: resolvedManufacturer,
         relocation_needed: values.relocation_needed || null,
         replacement_needed: values.replacement_needed || null,
         water_tank_capacity: values.water_supply_type === '물탱크' ? (values.water_tank_capacity || null) : null,
@@ -539,7 +543,7 @@ export default function MeterEditModal({ record, onClose }: Props) {
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold text-text-secondary">비고</label>
               <div className="flex items-center gap-1.5">
-                {(['호폐', '위치불명'] as const).map((preset) => (
+                {(['호폐', '위치불명', '적재'] as const).map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -559,9 +563,9 @@ export default function MeterEditModal({ record, onClose }: Props) {
               type="text"
               value={(values.note as string) ?? ''}
               onChange={(e) => set('note', e.target.value || null)}
-              disabled={values.note === '호폐' || values.note === '위치불명'}
-              placeholder={values.note === '호폐' || values.note === '위치불명' ? '' : '비고 직접 입력'}
-              className={`${inputCls} ${values.note === '호폐' || values.note === '위치불명' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={values.note === '호폐' || values.note === '위치불명' || values.note === '적재'}
+              placeholder={values.note === '호폐' || values.note === '위치불명' || values.note === '적재' ? '' : '비고 직접 입력'}
+              className={`${inputCls} ${values.note === '호폐' || values.note === '위치불명' || values.note === '적재' ? 'opacity-50 cursor-not-allowed' : ''}`}
             />
           </div>
 
@@ -727,13 +731,29 @@ export default function MeterEditModal({ record, onClose }: Props) {
                 {/* 제작회사 */}
                 <div>
                   <label className={labelCls}>제작회사</label>
-                  <input
-                    type="text"
-                    placeholder="직접 입력"
-                    value={(values.manufacturer as string) ?? ''}
-                    onChange={(e) => set('manufacturer', e.target.value || null)}
-                    className={inputCls}
-                  />
+                  <select
+                    value={manufacturerSelect}
+                    onChange={(e) => {
+                      setManufacturerSelect(e.target.value);
+                      if (e.target.value !== '기타') setManufacturerCustom('');
+                    }}
+                    className={selectCls}
+                  >
+                    <option value="">— 선택 —</option>
+                    {MANUFACTURERS.map((o) => (
+                      <option key={o} value={o}>{o === '기타' ? '기타(직접입력)' : o}</option>
+                    ))}
+                  </select>
+                  {manufacturerSelect === '기타' && (
+                    <input
+                      type="text"
+                      placeholder="직접 입력"
+                      value={manufacturerCustom}
+                      onChange={(e) => setManufacturerCustom(e.target.value)}
+                      className={`${inputCls} mt-2`}
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 {/* 이설필요여부 */}

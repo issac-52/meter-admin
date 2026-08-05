@@ -42,6 +42,10 @@ export function mapToMapMarker(r: MeterRecord): MeterMapMarker {
 
 export const USAGE_TYPES = ['가정집', '상가', '주상복합', '빌라', '공공기관', '기타'];
 export const LOCATION_DETAIL_OPTIONS = ['건물앞', '건물뒤', '건물좌', '건물우', '입구좌', '입구우', '대문좌측', '대문우측', '기타'];
+export const MANUFACTURERS = [
+  '경성JENIX', 'SES', '그린플로우', '한영계기', '한국아이치', 'HITEC',
+  '효성테크', '아이원테크', '청호정밀', '신한', '대한계기', '기타',
+];
 
 function parseLocationInit(val: string | null) {
   if (!val) return { inOut: '' as '' | '옥내' | '옥외', detail: '', custom: '' };
@@ -67,6 +71,18 @@ function initUsageCustom(val: string | null) {
   return val;
 }
 
+function initManufacturerSelect(val: string | null) {
+  if (!val) return '';
+  if (MANUFACTURERS.slice(0, -1).includes(val)) return val;
+  return '기타';
+}
+
+function initManufacturerCustom(val: string | null) {
+  if (!val) return '';
+  if (MANUFACTURERS.slice(0, -1).includes(val)) return '';
+  return val;
+}
+
 function nowString() {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
@@ -80,6 +96,8 @@ export type EditFormValues = {
   locationInOut: '' | '옥내' | '옥외';
   locationDetail: string;
   locationCustom: string;
+  manufacturerSelect: string;
+  manufacturerCustom: string;
   values: Partial<MeterInsert>;
 };
 
@@ -92,6 +110,8 @@ export function mapToEditFormValues(r: MeterRecord): EditFormValues {
     locationInOut: initLoc.inOut,
     locationDetail: initLoc.detail,
     locationCustom: initLoc.custom,
+    manufacturerSelect: initManufacturerSelect(r.manufacturer),
+    manufacturerCustom: initManufacturerCustom(r.manufacturer),
     values: {
       meter_number: r.meter_number,
       reading: r.reading,

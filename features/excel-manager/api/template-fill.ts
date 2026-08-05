@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
       .from("meter_records")
       .select("*")
       .or(
-        "meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,location.not.is.null,usage_type.not.is.null,floor.not.is.null,note.eq.호폐,note.eq.위치불명"
+        "meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,location.not.is.null,usage_type.not.is.null,floor.not.is.null,note.eq.호폐,note.eq.위치불명,note.eq.적재"
       )
       .order("block", { ascending: true })
       .order("row_no", { ascending: true, nullsFirst: false })

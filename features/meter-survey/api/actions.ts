@@ -30,9 +30,9 @@ export type StatusFilter = 'processed' | 'unprocessed' | 'closed';
 // 하나라도 비어있음
 const ANY_EMPTY =
   'meter_number.is.null,reading.is.null,sealed.is.null,location.is.null,usage_type.is.null,floor.is.null';
-// 종결(호폐/위치불명) 아님 — note가 null이거나 closed 목록에 없는 경우
-// note.is.null: null 허용 / note.not.in.(...): 호폐·위치불명 제외
-const NOT_CLOSED = 'note.is.null,note.not.in.(호폐,위치불명)';
+// 종결(호폐/위치불명/적재) 아님 — note가 null이거나 closed 목록에 없는 경우
+// note.is.null: null 허용 / note.not.in.(...): 호폐·위치불명·적재 제외
+const NOT_CLOSED = 'note.is.null,note.not.in.(호폐,위치불명,적재)';
 
 export async function getMeterRecords(
   page: number,
@@ -56,7 +56,7 @@ export async function getMeterRecords(
     .range((page - 1) * pageSize, page * pageSize - 1);
 
   let totalQuery     = admin.from('meter_records').select('*', { count: 'exact', head: true });
-  let closedQuery    = admin.from('meter_records').select('*', { count: 'exact', head: true }).or('note.eq.호폐,note.eq.위치불명');
+  let closedQuery    = admin.from('meter_records').select('*', { count: 'exact', head: true }).or('note.eq.호폐,note.eq.위치불명,note.eq.적재');
   let processedQuery = admin.from('meter_records').select('*', { count: 'exact', head: true })
     .or(NOT_CLOSED)
     .not('meter_number', 'is', null).not('reading', 'is', null)
@@ -85,7 +85,7 @@ export async function getMeterRecords(
 
   // 상태 필터는 메인 쿼리에만 적용
   if (status === 'closed') {
-    mainQuery = mainQuery.or('note.eq.호폐,note.eq.위치불명');
+    mainQuery = mainQuery.or('note.eq.호폐,note.eq.위치불명,note.eq.적재');
   } else if (status === 'processed') {
     mainQuery = mainQuery.or(NOT_CLOSED)
       .not('meter_number', 'is', null).not('reading', 'is', null)
@@ -212,7 +212,7 @@ export async function getMeterRecordsWithSurveyData(): Promise<MeterRecord[]> {
   const { data } = await admin
     .from('meter_records')
     .select('*')
-    .or('meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,note.eq.호폐')
+    .or('meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,note.eq.호폐,note.eq.적재')
     .order('block', { ascending: true })
     .order('row_no', { ascending: true, nullsFirst: false });
   const role = await getUserRole();
@@ -244,8 +244,9 @@ export async function getCompletedRecords(dateFrom?: string, dateTo?: string): P
     .select('*')
     .or(
       `and(note.is.null,meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,location.not.is.null,usage_type.not.is.null,floor.not.is.null),` +
-      `and(note.neq.호폐,meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,location.not.is.null,usage_type.not.is.null,floor.not.is.null),` +
-      `note.eq.호폐`
+      `and(note.not.in.(호폐,적재),meter_number.not.is.null,reading.not.is.null,sealed.not.is.null,location.not.is.null,usage_type.not.is.null,floor.not.is.null),` +
+      `note.eq.호폐,` +
+      `note.eq.적재`
     )
     .order('block', { ascending: true })
     .order('row_no', { ascending: true, nullsFirst: false });
@@ -283,7 +284,7 @@ export async function getMeterRecordsForMap(block?: string, status?: StatusFilte
     .order('row_no', { ascending: true, nullsFirst: false });
   if (block) query = query.eq('block', block);
   if (status === 'closed') {
-    query = query.eq('note', '호폐');
+    query = query.in('note', ['호폐', '적재']);
   } else if (status === 'processed') {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query = (query.or(NOT_CLOSED) as any)
