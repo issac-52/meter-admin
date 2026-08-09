@@ -9,7 +9,7 @@ export const VALVE_TYPE_LABEL: Record<ValveType, string> = {
 };
 
 export const HYDRANT_TYPE_OPTIONS = ['지하식', '지상쌍구', '기타'];
-export const VALVE_FORM_OPTIONS = ['GV', '핸들밸브', '확인불가', '기타'];
+export const SLUICE_VALVE_FORM_OPTIONS = ['GV', 'BV', '글로브', '볼밸브', '기타'];
 export const AIR_VALVE_FORM_OPTIONS = ['단구', '쌍구', '기능성밸브', '기타'];
 export const VALVE_MATERIAL_OPTIONS = ['주철', 'STS', '확인불가', '기타'];
 export const DRIVE_METHOD_OPTIONS = ['수동', '자동'];
@@ -31,7 +31,7 @@ export function resolveSelectWithCustom(select: string, custom: string): string 
 }
 
 export function getValveFormOptions(valveType: ValveType): string[] {
-  return valveType === '공기밸브' ? AIR_VALVE_FORM_OPTIONS : VALVE_FORM_OPTIONS;
+  return valveType === '공기밸브' ? AIR_VALVE_FORM_OPTIONS : SLUICE_VALVE_FORM_OPTIONS;
 }
 
 // ─── 보호통규격 / 철개규격 ("Φ" 접두 조합) ────────────────────────────────────
@@ -81,7 +81,7 @@ export type ValveEditFormValues = {
 
 export function mapToEditFormValues(r: ValveRecord): ValveEditFormValues {
   const hydrantType = initSelectWithCustom(r.hydrant_type, HYDRANT_TYPE_OPTIONS);
-  const valveForm = initSelectWithCustom(r.valve_form, VALVE_FORM_OPTIONS);
+  const valveForm = initSelectWithCustom(r.valve_form, getValveFormOptions(r.valve_type));
   const valveMaterial = initSelectWithCustom(r.valve_material, VALVE_MATERIAL_OPTIONS);
   const protectionPipe = parseProtectionPipeSpec(r.protection_pipe_spec);
 
