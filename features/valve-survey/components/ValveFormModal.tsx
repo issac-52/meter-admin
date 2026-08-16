@@ -275,7 +275,7 @@ export default function ValveFormModal(props: Props) {
       issue: !isHydrant ? (values.issue || null) : null,
       valve_room_spec: !isHydrant || isUndergroundHydrant ? (values.valve_room_spec || null) : null,
       valve_room_depth: !isHydrant ? (values.valve_room_depth || null) : null,
-      valve_diameter: isSluiceValve ? (values.valve_diameter || null) : null,
+      valve_diameter: (isSluiceValve || isAirValve) ? (values.valve_diameter || null) : null,
     };
 
     startTransition(async () => {
@@ -546,7 +546,7 @@ export default function ValveFormModal(props: Props) {
             </>
           ) : (
             <>
-              {isSluiceValve && (
+              {(isSluiceValve || isAirValve) && (
                 /* 관경 */
                 <div>
                   <label className={labelCls}>관경</label>

@@ -12,7 +12,7 @@ const viewUrl = (path: string) => `${STORAGE_BASE}/${path}`;
 
 const COVER_OPTIONS = ['', '뚜껑 파손', '뚜껑 없음', '보호통 파손', '없음'];
 const WATER_SUPPLY_OPTIONS = ['직접', '간접', '물탱크', '저수조'];
-const METER_CONDITION_OPTIONS = ['', '초파', '녹폐', '정상', '표시부불량'];
+const METER_CONDITION_OPTIONS = ['', '초파', '녹폐', '정상', '표시부불량', '토사매몰', '수몰'];
 
 type Props = {
   record: MeterRecord;
