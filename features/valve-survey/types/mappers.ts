@@ -13,7 +13,7 @@ export const SLUICE_VALVE_FORM_OPTIONS = ['GV', 'BV', '글로브', '볼밸브', 
 export const AIR_VALVE_FORM_OPTIONS = ['단구', '쌍구', '기능성밸브', '기타'];
 export const VALVE_MATERIAL_OPTIONS = ['주철', 'STS', '확인불가', '기타'];
 export const DRIVE_METHOD_OPTIONS = ['수동', '자동'];
-export const OPEN_CLOSE_OPTIONS = ['OPEN', 'CLOSE'];
+export const OPEN_CLOSE_OPTIONS = ['OPEN', 'CLOSE', '확인불가'];
 
 // ─── "기타" 직접입력 옵션 공용 파서 ───────────────────────────────────────────
 
