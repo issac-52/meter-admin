@@ -44,7 +44,7 @@ export const USAGE_TYPES = ['가정집', '상가', '주상복합', '빌라', '�
 export const LOCATION_DETAIL_OPTIONS = ['건물앞', '건물뒤', '건물좌', '건물우', '입구좌', '입구우', '대문좌측', '대문우측', '기타'];
 export const MANUFACTURERS = [
   '경성JENIX', 'SES', '그린플로우', '한영계기', '한국아이치', 'HITEC',
-  '효성테크', '아이원테크', '청호정밀', '신한', '대한계기', '연호미터텍', '삼성계기공업', '확인불가', '기타',
+  '효성테크', '아이원테크', '청호정밀', '신한', '대한계기', '연호미터텍', '삼성계기공업', '신우', '확인불가', '기타',
 ];
 
 function parseLocationInit(val: string | null) {
