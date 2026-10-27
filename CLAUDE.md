@@ -1,93 +1,52 @@
-# meter-admin
+# meter-admin 개발·AI 협업 규칙
 
-수용가 조사 야장관리 전용 Next.js 앱. booup-blog에서 분리된 독립 프로젝트.
+> 2026-10-27 / `master` @ `a2975dd` 기준.
 
-## 스택
-- Next.js 16 App Router, TypeScript, Tailwind CSS v4
-- Supabase (auth + DB), Cloudflare R2 (이미지 스토리지), Naver Maps API
-- next-themes (라이트/다크모드)
+## 구조
 
-## 폴더 구조 (도메인 기준)
+- Next.js 16 App Router / React 19 / TypeScript / Tailwind CSS v4
+- `app/admin/`: 페이지와 Route Handler
+- `features/auth/`, `features/meter-survey/`, `features/valve-survey/`, `features/excel-manager/`: 도메인별 API·컴포넌트·타입
+- `shared/lib/supabase/`: Supabase 브라우저/서버/service-role 클라이언트
+- `shared/lib/r2-storage.ts`: R2
+- `shared/ui/AdminNav.tsx`: PC 사이드바/모바일 하단 탐색 및 사이드바 쿠키 상태
+- `proxy.ts`: 로그인 세션 체크/리다이렉트
 
-```
-proxy.ts                                # 인증 보호 — 미인증 시 /admin/login 리다이렉트
-app/
-  admin/
-    login/page.tsx
-    meter/page.tsx                      # 야장관리 메인 (서버 컴포넌트)
-    meter-excel/page.tsx                # 엑셀관리자
-    api/
-      template-fill/route.ts
-      upload-meter-image/route.ts
-      image-list/route.ts
-      image-proxy/route.ts
-      geocode/route.ts
-features/
-  meter-survey/                         # 야장관리 도메인
-    api/                                # _actions.ts (getMeterRecords 등 Server Actions)
-    components/                         # MeterTable, MeterEditModal, MeterMapView
-    types/                              # DTO/ViewModel + mapper (maskName 포함)
-  excel-manager/                        # 엑셀관리자 도메인
-    api/                                # template-fill 연동, 업로드 파싱 (형식별 파서)
-    components/                         # MeterExcelUpload, MeterExcelDiff, MeterTemplateFill
-    types/
-  auth/                                 # 인증 도메인
-    api/                                # loginAction, logoutAction, profiles role 조회
-components/admin/
-  AdminNav.tsx                          # 사이드바 (접이식) + 다크모드 토글
-shared/
-  ui/
-  lib/
-    supabase/{admin,server,client}.ts
-    r2-storage.ts
-  types/                                # meter_records 공통 DTO 스키마 (Zod)
-```
+## AI와 개발자의 책임
 
-## 레이어 원칙
+1. 요구사항·예외 상황 정리: AI + 개발자.
+2. 설계/정합성 정책·수용 기준 승인: 개발자.
+3. 구현 및 테스트 초안: AI 중심 + 개발자 검토.
+4. 검증: lint/build/테스트/실제 데이터 시나리오 + 개발자 리뷰.
+5. 운영 배포·DB 수정·복구 판단: 개발자 승인.
 
-- **서버 데이터 조회는 서버 컴포넌트 + Server Actions로 유지한다.** 클라이언트 페칭(TanStack Query 등)으로 되돌리지 않는다. 필터/정렬/페이지네이션은 URL 쿼리스트링 → 서버 재조회 방식을 유지.
-- **DTO(DB row)와 ViewModel을 분리**하고, 화면별 mapper 함수를 통해 변환한다 (`mapToTableRow`, `mapToMapMarker`, `mapToEditFormValues` 등). 컴포넌트에 DB row를 그대로 내려주지 않는다.
-- **외부에서 들어오는 데이터는 진입점에서 Zod로 검증**한다 (엑셀 업로드 파싱 결과, 지오코딩 API 응답). `z.infer`로 타입 추론해서 중복 정의하지 않는다.
-- 새 기능을 추가할 때도 `features/{도메인}/{api,components,types}` 구조를 따른다. 여러 도메인이 공유하는 것만 `shared/`로 옮긴다.
+작업 전 영향을 받는 테이블, 엑셀 양식, R2 이미지, 기존 서비스 공유 리소스, 개인정보/권한, 롤백 방법을 적으세요. AI에게 배포/운영 DB 변경을 무조건 위임하지 마세요.
 
-## 디자인 시스템
+## 반드시 유지할 현재 규칙
 
-톤: 실용적/미니멀 (내부 관리툴). 무채색(zinc) 베이스 + 청록(teal/cyan) 포인트 컬러 하나만 사용, 장식적 요소 최소화.
+- 수용가 업로드의 동일 블록+`row_no` 업데이트는 **기본정보 5개 필드만**: `name`, `address`, `old_meter_number`, `final_reading`, `block`. 신규 행은 INSERT. 과거 문서의 전체 삭제/재생성 설명은 틀립니다.
+- 밸브 업로드의 동일 블록+`valve_no` 매칭은 업로드 행을 UPSERT합니다. `valve_type` 중복 번호 문제, 현장 데이터 덮어쓰기를 확인하세요.
+- 수용가 처리 완료 조건 여섯 필드와 종결 비고 `호폐`·`위치불명`·`적재`를 임의로 바꾸지 마세요. 엑셀 추출과 목록 집계의 차이도 테스트해야 합니다.
+- 실명은 서버에서 `profiles.role` 확인 후 `admin`에게만 노출하고 일반 조회 응답은 서버에서 마스킹합니다. 클라이언트에 원본 실명 전달 금지.
+- 원본 엑셀 양식 채우기는 JSZip/XML 기반 서식 보존 코드입니다. 단순 xlsx 라이브러리 저장 로직으로 교체하지 마세요.
+- `옥내(건물앞)` 같은 위치 데이터 형식 및 기존 DB 값과의 호환성을 유지하세요.
+- R2 이미지 객체 삭제와 DB 참조 변경은 서로 원자적이지 않으므로 실패 복구 로직을 검토하세요.
+- 기존 문서에 따르면 `booup-blog`와 DB/R2를 공유합니다. 실제 분리 여부를 확인하기 전 단독 변경 금지.
 
-```
-                라이트        다크
-background      #FAFAFA      #18181B
-surface         #FFFFFF      #27272A
-border          #E4E4E7      #3F3F46
-text-primary    #18181B      #FAFAFA
-text-secondary  #71717A      #A1A1AA
-accent          #0E7490      #22D3EE
-success          #16A34A      #22C55E
-warning          #D97706      #F59E0B
-```
+## 보안 경고
 
-- 타이포그래피: Pretendard. 숫자 컬럼(지침, 좌표, 도면번호)에는 `tabular-nums` 적용.
-- 다크모드: `next-themes` + Tailwind v4 `@theme` CSS 변수.
-- 사이드바: 펼침(라벨+아이콘) ↔ 접힘(아이콘만) 두 상태, localStorage에 상태 저장. 토글 버튼은 접힘 상태에서도 항상 클릭 가능한 위치 유지.
-- 지도 뷰(`MeterMapView`)는 Naver Maps 자체 스타일을 존중한다. 다크모드 시 지도 자체는 그대로 두고 주변 UI(패널, 마커 팝업)만 다크 토큰을 적용한다.
+기존 코드를 무조건 안전한 레퍼런스로 여기면 안 됩니다. `proxy.ts`의 세션 리다이렉트와 모든 Server Action의 인가는 동등하지 않습니다. 일부 service-role 조회 함수에 자체 로그인 검사가 누락되어 있고, 일부 쓰기 함수는 `admin` 권한 대신 **인증만** 검사합니다. 신규 API/Action은 사용자 인증 + 작업별 role 인가를 명시적으로 구현하세요. 기존 함수도 보안 점검 대상입니다. 서비스 키/R2 비밀키를 클라이언트, 로그, PR에 유출하지 마세요.
 
-## 민감정보 처리 원칙 (이름/주소)
+## 회귀 검증 체크
 
-- DB에는 실명을 그대로 저장한다 (업로드 시 마스킹하지 않음).
-- 실명 노출 여부는 **서버(Server Action)에서 사용자 role(`profiles` 테이블: `admin` | `viewer`)을 확인한 뒤 결정**한다. `admin`은 실명, 그 외는 마스킹(`오**`)된 값을 반환.
-- 마스킹 로직은 `features/meter-survey/types/`의 mapper에 위치하며, **클라이언트로는 이미 마스킹 여부가 결정된 값만 내려간다.** 네트워크 응답에 실명 원본이 노출되지 않는지는 새 조회 로직을 추가할 때마다 확인한다.
-- 조회 로그, 컬럼 단위 RLS는 현재 범위 밖 (필요성 재검토 시 별도 논의).
+- `npm run lint`, `npm run build` (`package.json`에 `test` 스크립트 없음).
+- 수용가·밸브의 신규/기존 엑셀 업로드 및 건수/필드 변화 확인.
+- 중복 도면번호·중복 밸브번호, 부분 업로드 실패, 잘못된 양식.
+- 관리자/뷰어 실명 마스킹, 로그인/비로그인/쓰기 권한.
+- 사진 업로드·삭제·일괄 삭제, 지도 좌표, 모바일 화면.
+- 원본 양식 채우기 후 서식·내용 비교.
+- 운영 배포 전 백업 확인, 배포 후 스모크 테스트.
 
-## 절대 건드리면 안 되는 부분
+작업 결과에는 변경 파일, 데이터 영향, 테스트 결과, 남은 위험을 남깁니다.
 
-- `template-fill/route.ts`의 JSZip 기반 XML 직접 조작 로직 (서식 보존 목적으로 xlsx 라이브러리 대신 직접 구현한 것 — xlsx 라이브러리로 되돌리지 말 것)
-- `proxy.ts`의 인증 리다이렉트 흐름과 각 API/Server Action의 개별 `getUser()` 재검증 (쿠키 조작 방어 목적)
-- 위치 데이터 형식 (`옥내(건물앞)` 등)과 파싱 정규식
-- booup-blog와 공유하는 Supabase 인스턴스/R2 버킷 — 스키마나 버킷 구조를 독단적으로 바꾸지 말 것
-
-## 관련 문서
-
-- `ARCHITECTURE.md`: 기술 선택 이유, DB 스키마 상세, 엑셀 처리 로직, 인증 구조
-- `README.md`: 로컬 실행/배포 방법
-
-관련 프로젝트: booup-blog (F:/booup-blog, booup.dev)에서 야장관리 기능을 분리. 동일한 Supabase 인스턴스와 R2 버킷을 공유하며, 코드베이스는 독립적으로 관리됨.
+참조: [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md), [MAINTENANCE_GUIDE.md](MAINTENANCE_GUIDE.md).

@@ -1,131 +1,83 @@
-아키텍처 문서
-이 문서는 새로 투입된 개발자가 프로젝트의 기술적 선택과 구조를 빠르게 파악할 수 있도록 작성됐습니다.
-폴더 구조와 UI 컨벤션은 `CLAUDE.md`를 참고하세요. 이 문서는 "왜 이렇게 했는지"에 집중합니다.
+# 야장관리자 아키텍처
 
-전체 흐름
-[현장 엑셀] → 업로드 → [Supabase DB: meter_records]
-                              ↕ 조사원 입력 (웹 UI)
-                              ↕ 사진 업로드 (R2)
-              다운로드 ← [완성된 엑셀 / 차분 엑셀]
+> 2026-10-27 / `master` @ `a2975dd` 정적 소스 검토. 실제 서비스·DB·스토리지 운영 설정의 검증을 뜻하지 않습니다.
 
-기술 선택 이유
+## 구성
 
-Next.js 16 App Router
-서버 컴포넌트에서 DB를 직접 조회해 초기 렌더링 시 데이터를 함께 내려줍니다. 야장 목록처럼 데이터가 많은 페이지에서 클라이언트 로딩 스피너 없이 바로 표시됩니다. Server Actions로 폼 제출도 별도 API 없이 처리합니다.
+```text
+브라우저 (데스크톱/모바일)
+  └─ Next.js 16 App Router
+      ├─ proxy.ts: 세션 검사와 로그인 리다이렉트
+      ├─ app/admin: 페이지 및 API 라우트
+      ├─ features/*: Server Actions / 클라이언트 컴포넌트
+      ├─ Supabase Auth / PostgreSQL
+      ├─ Cloudflare R2: 조사 사진
+      └─ Naver Maps: 지도 및 주소-좌표 변환
+```
 
-Supabase
-인증과 DB를 하나의 서비스로 해결합니다. Supabase Auth로 세션을 관리하고, PostgreSQL을 직접 쿼리합니다. createAdminClient()(service role)는 서버에서만, createClient()(anon key)는 세션 확인에만 사용합니다.
+도메인 폴더는 `features/meter-survey`, `features/valve-survey`, `features/excel-manager`, `features/auth`로 구분됩니다. 공통 접근 코드는 `shared/lib`, 데이터 타입은 `shared/types`, 탐색 컴포넌트는 `shared/ui/AdminNav.tsx`에 있습니다. 사이드바 접힘 상태는 **쿠키 `sidebar-collapsed`**에 저장되며, 과거 문서의 `localStorage` 표기는 구식입니다.
 
-Cloudflare R2
-현장 사진 저장소로 사용합니다. S3 호환 API를 지원해 @aws-sdk/client-s3로 그대로 연결됩니다. 이미지 업로드는 Presigned URL 방식으로, 브라우저 → R2 직접 전송하여 서버 Bandwidth를 소비하지 않습니다.
+## 화면
 
-Naver Maps API
-국내 주소 기반 지오코딩에 최적화돼 있습니다. 도로명주소 → 위경도 변환(/admin/api/geocode)에 사용하고, 지도 표시는 Naver Maps JS SDK를 동적 로드합니다.
+| URL | 역할 |
+| --- | --- |
+| `/admin/meter` | 수용가 목록·필터·지도·사진·수정 |
+| `/admin/valve` | 밸브/소화전 목록·지도·사진·수정 |
+| `/admin/regions` | 지역/블록 분류 |
+| `/admin/meter-excel` | 수용가 및 밸브 엑셀 입출력, 수용가 양식 채우기 |
+| `/admin/login` | 인증 |
 
-인증 구조
-proxy.ts  (Next.js 16에서 middleware.ts 대신 사용)
-  ├── /admin/login 이외의 모든 경로 → 미인증 시 /admin/login 리다이렉트
-  └── /admin/login → 인증 상태면 /admin/meter 리다이렉트
-각 API 라우트와 Server Action에서도 개별적으로 supabase.auth.getUser()로 재검증합니다. 미들웨어만 믿지 않는 이유는 쿠키 조작 방어를 위해서입니다.
+## 데이터 모델
 
-권한(role) 구조
-로그인 여부만으로는 실명(성명) 노출 범위를 통제할 수 없어서, `profiles` 테이블(`auth.users`와 1:1)에 `role`(`admin` | `viewer`) 컬럼을 두고 관리합니다. 실명이 필요한 실무자만 `admin` role을 부여받습니다. role 체크와 마스킹 여부 결정은 반드시 Server Action 안에서 이뤄지며, 클라이언트에는 이미 마스킹 여부가 결정된 값만 내려갑니다 — 이는 네트워크 응답에 실명 원본이 노출되는 것을 막기 위한 설계입니다.
+- `meter_records`: `id`, `block`, `row_no`, `name`, `address`, `old_meter_number`, `meter_number`, `reading`, `sealed`, `location`, `usage_type`, `floor`, `note`, `survey_date`, `final_reading`, `image1_id` ~ `image4_id`, `lat`, `lng` 및 기타 조사 항목.
+- `valve_records`: `id`, `block`, `valve_type` (`제수밸브`, `공기밸브`, `소화전`), `valve_no`, 주소·조사 항목, `image1_id`, `image2_id`, 위치 좌표.
+- `regions`, `block_regions`: 지역 및 블록 할당. 새 블록 업로드 시 미분류로 생성 가능합니다.
+- `profiles`: 사용자 `role` (`admin`/`viewer`)에 따라 수용가 실명 노출 여부 결정. Supabase `auth.users`와 연관됩니다.
 
-DB 스키마
+SQL 마이그레이션이 저장소에서 확인되지 않으므로 실제 스키마 제약·인덱스·RLS·백업 정책은 Supabase 프로젝트에서 별도 확인해야 합니다.
 
-profiles
-  id      PK, auth.users.id FK
-  role    'admin' | 'viewer'
+## 수용가 엑셀 (현재 코드와 일치시키기)
 
-meter_records
-한 행 = 수용가 한 곳의 조사 레코드.
+`features/excel-manager/components/MeterExcelUpload.tsx`는 시트 `수도미터목록`이 있으면 대불 형식, 없으면 기존 형식으로 분기합니다. 대불은 지정 열 위치(데이터 5행부터), 기존은 헤더 매핑을 사용합니다. Zod 검증과 블록 선택/미리보기를 거칩니다.
 
-식별
-  id              PK
-  block           블록 구분 (엑셀 업로드 단위)
-  row_no          도면번호
-  name            성명 (DB에는 실명 저장, 조회 시 role에 따라 마스킹 여부 결정 — 위 "권한 구조" 참고)
-  address         도로명주소
-  old_meter_number 기존 기물번호 (업로드 시 등록)
+`features/meter-survey/api/actions.ts` → `importFromExcel(block, rows)`:
 
-조사 결과 (현장 입력)
-  meter_number    조사된 기물번호
-  reading         지침
-  sealed          봉인여부: '봉인' | '미봉인'
-  location        위치: '옥내(건물앞)' 형식 (옥내/옥외 + 세부위치 조합)
-  usage_type      사용형태
-  floor           층수
-  note            비고 ('호폐' = 폐전 처리)
-  survey_date     조사일자
+1. 기존 블록의 `id`, `row_no` 조회.
+2. 같은 `row_no`는 **`name`, `address`, `old_meter_number`, `final_reading`, `block`만 갱신**.
+3. 신규 `row_no`는 INSERT.
+4. 블록 분류 테이블에 미분류 블록 등록.
 
-추가 정보
-  cover_type      보호통뚜껑양식
-  water_supply_type  급수방식: '직접' | '간접' | '물탱크' | '저수조'
-  water_tank_capacity 물탱크 용량
-  water_pressure  수압
-  meter_condition 계량기 상태
-  manufacturer    제작회사
-  meter_type      계량기형식: '기계식' | '전자식'
-  reading_method  검침방식
-  relocation_needed  이설여부: '필요' | '불필요'
-  replacement_needed 교체필요: '필요' | '불필요' (선택)
+**같은 블록 전체 DELETE → INSERT가 아닙니다.** 업로드 파일에 없는 기존 행이 자동 제거되지도 않습니다. INSERT와 UPSERT가 별도 요청이므로 일부 성공 후 실패 가능성을 고려해야 합니다.
 
-이미지 (R2 파일 경로)
-  image1_id ~ image4_id
+## 밸브 엑셀
 
-좌표
-  lat, lng        Naver 지오코딩으로 채워짐
+`features/valve-survey/components/ValveExcelUpload.tsx`는 제수·공기·소화전 파일 형식을 감지하고 유형별 열 위치로 파싱합니다.
 
-  created_at
-처리 완료 판정: meter_number, reading, sealed, location, usage_type, floor 6개 전부 not null (또는 note = '호폐')
+`features/valve-survey/api/actions.ts` → `importValvesFromExcel(block, rows)`는 **블록 + `valve_no`**로 기존 행을 찾고 매칭된 행에 업로드 데이터를 UPSERT합니다. 수용가와 달리 갱신 범위가 넓습니다. 매칭 키에 `valve_type`이 없으므로 한 블록 내 유형별 번호가 중복되는 경우 실데이터 검증이 필요합니다. 단일 트랜잭션 보장은 코드에서 확인되지 않습니다.
 
-엑셀 처리
-업로드 (MeterExcelUpload.tsx)
-엑셀을 파싱해 DB에 INSERT합니다 (성명은 마스킹 없이 실명 그대로 저장). 두 가지 형식을 자동 감지합니다.
+## 완료/종결 및 엑셀 추출
 
-형식	감지 기준	파싱 방식
-기존 형식	시트명에 수도미터목록 없음	헤더 키 이름으로 컬럼 매핑
-대불 형식	수도미터목록 시트 존재	컬럼 인덱스(0-based)로 직접 접근
-같은 블록을 업로드하면 해당 블록 전체를 DELETE 후 INSERT합니다. 부분 업데이트가 아니라 전체 교체입니다.
+`getMeterRecords`의 처리 완료는 `meter_number`, `reading`, `sealed`, `location`, `usage_type`, `floor` 모두 채워진 상태이며 종결 사유 `호폐`, `위치불명`, `적재`는 별도로 집계합니다. `getCompletedRecords` 등 추출 함수의 조건은 이 기준과 완전히 같지 않을 수 있으므로 화면 카운트와 엑셀 건수를 같은 지표로 가정하지 않습니다.
 
-양식 채우기 (template-fill/route.ts)
-원본 xlsx 파일(양식)에 DB 데이터를 채워 넣습니다. xlsx 라이브러리 대신 JSZip으로 XML을 직접 조작합니다.
+수용가 원본 양식 채우기는 `features/excel-manager/api/template-fill.ts`의 **JSZip/XML 직접 수정**을 활용합니다. xlsx를 단순 재저장하여 기존 병합/서식을 망가뜨리지 마세요.
 
-이유: xlsx 라이브러리로 파일을 읽고 쓰면 셀 서식(병합, 테두리, 색상)이 손실됩니다. xlsx는 내부적으로 .zip 파일이므로 JSZip으로 xl/worksheets/sheet*.xml을 직접 파싱·수정하면 원본 서식을 100% 보존할 수 있습니다.
+## 사진 및 지도
 
-매칭 우선순위: block + row_no (위치 기반) → old_meter_number (기물번호 기반)
+수용가는 최대 4개, 밸브는 최대 2개 이미지 경로를 DB에 보관합니다. Presigned URL을 통한 R2 업로드와 DB 경로 기록은 별도 작업이므로 한쪽만 성공할 위험이 있습니다. 일괄 이미지 삭제는 객체와 DB 참조를 모두 제거하며 복원 보장이 없습니다. 지도는 Naver Maps 및 지오코딩/역지오코딩을 사용하고, 좌표가 없는 항목은 지도에서 제외될 수 있습니다.
 
-이미지 업로드 흐름
-1. 브라우저 → GET /admin/api/upload-meter-image?slot=1&row_no=...
-              ← presigned URL (5분 유효)
+## 인증·권한 검토 필요
 
-2. 브라우저 → PUT presignedUrl (R2 직접 업로드, 서버 경유 없음)
+`proxy.ts`가 ` / ` 및 `/admin/:path*`에 대해 세션 확인과 리다이렉트를 합니다. **모든 Server Action이 자체 인증/인가를 완료한다는 기존 설명은 사실이 아닙니다.** 예를 들어 `getMeterRecords`, `getBlockList`, `getRegions`, `getRegionsWithBlocks`, `getBlockRegions`는 함수 시작에 명시적 `requireAuth()`가 없습니다. 일부 쓰기 Action의 `requireAuth()`는 로그인 여부만 판단하고 `admin` role을 검사하지 않습니다. service-role 클라이언트를 사용하므로 조회/쓰기 엔드포인트 단위의 보안 검토가 필요합니다.
 
-3. 브라우저 → POST /admin/api/upload-meter-image { record_id, slot, file_path }
-              → DB: meter_records.image{slot}_id = file_path
-삭제 시: R2에서 파일 삭제 → DB 컬럼 null로 업데이트
+현재 코드가 사용자 권한을 안전하게 분리한다는 보증으로 이 문서를 사용하면 안 됩니다. 특히 신규 API와 Server Action은 인증과 role 인가를 명시적으로 구현·테스트해야 합니다. 실명 마스킹은 서버 mapper를 통해 클라이언트 전송 전에 적용하는 설계입니다.
 
-컴포넌트 구조
-MeterTable (목록, 필터, 페이지네이션, 다운로드)
-  └── MeterEditModal (수정 모달)
-        └── ImageSlotCard × 4 (이미지 슬롯)
-  └── MeterMapView (지도 뷰)
-        └── MeterEditModal (지도에서 클릭 시 수정)
+## 변경 고위험 영역
 
-MeterExcelDiff (차분 다운로드)
-MeterTemplateFill (양식 채우기)
-MeterExcelUpload (업로드 모달)
-MeterTable은 클라이언트 컴포넌트이고, 상위 meter/page.tsx는 서버 컴포넌트입니다. 필터·정렬·페이지네이션은 모두 URL 쿼리스트링으로 관리하며, 상태 변경 시 router.push()로 URL을 업데이트하면 서버에서 다시 데이터를 조회합니다.
+- 엑셀 파서/`importFromExcel`/`importValvesFromExcel`: 데이터 덮어쓰기·부분 실패.
+- `template-fill.ts`: 원본 양식 서식 파손.
+- `proxy.ts`, Auth, Supabase service-role: 개인정보/인가.
+- R2 객체 삭제·업로드: DB 참조 불일치 및 비복구 손실.
+- `regions`, `block_regions`: 분류 및 참조 영향.
+- `booup-blog`와 공유된 것으로 기록된 DB/R2: 공유 현황을 검증하기 전 스키마·버킷 변경 금지.
 
-UI (사이드바/다크모드)
-AdminNav는 펼침/접힘(아이콘만) 두 상태를 가지며 localStorage에 상태를 저장합니다. 라이트/다크모드는 next-themes로 처리합니다. 구체적인 디자인 토큰과 컨벤션은 `CLAUDE.md`를 참고하세요.
-
-위치 데이터 형식
-UI에서 2단계 선택 후 옥내(건물앞) 형식으로 저장합니다.
-
-1단계: 옥내 / 옥외
-2단계: 건물앞 / 건물뒤 / 건물좌 / 건물우 / 입구좌 / 입구우 / 기타
-파싱: /^(옥내|옥외)\((.+)\)$/ 정규식으로 옥내/옥외와 세부위치를 분리합니다.
-
-관련 프로젝트
-booup-blog (F:/booup-blog, booup.dev)에서 야장관리 기능을 분리했습니다. 동일한 Supabase 인스턴스와 R2 버킷을 공유하며, 코드베이스는 독립적으로 관리됩니다.
+운영 및 복원 절차는 [MAINTENANCE_GUIDE.md](MAINTENANCE_GUIDE.md)를 따릅니다.
